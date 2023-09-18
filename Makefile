@@ -19,11 +19,19 @@
 SHELL=bash -e
 default: all
 
-all : install_python_deps
+all : install
 
-install : check_bins install_python_deps cron_setup
+install : check_bins install_python_deps
 
-setup:
+setup: venv
+
+service:
+	$(info Setting up service)
+	systemctl enable /home/$(USER)/scripts/keybase_bot.service
+	systemctl start keybase_bot.service
+	$(info Done)
+
+venv:
 	echo "Setting up environment" ; \
 	mkdir -p .venv ; \
 	python3.7 -m venv .venv ; \
@@ -31,7 +39,7 @@ setup:
 	echo "Installing python dependencies" ; \
 	pip install -r tools/requirements.txt ; \
 	pip install --upgrade pip ; \
-	echo "Done"
+	echo "Done initializing virtual environment"
 
 REQUIRED_BINS := pip python3.7
 check_bins:
