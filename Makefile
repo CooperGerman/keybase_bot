@@ -24,14 +24,14 @@ all : install_python_deps
 install : check_bins install_python_deps cron_setup
 
 setup:
-	$(info Setting up environment)
-	mkdir -p .venv
-	python3.7 -m venv .venv
-	source .venv/bin/activate
-	$(info Installing python dependencies)
-	pip install -r tools/requirements.txt
-	pip install --upgrade pip
-	$(info Done)
+	echo "Setting up environment" ; \
+	mkdir -p .venv ; \
+	python3.7 -m venv .venv ; \
+	source .venv/bin/activate ; \
+	echo "Installing python dependencies" ; \
+	pip install -r tools/requirements.txt ; \
+	pip install --upgrade pip ; \
+	echo "Done"
 
 REQUIRED_BINS := pip python3.7
 check_bins:
