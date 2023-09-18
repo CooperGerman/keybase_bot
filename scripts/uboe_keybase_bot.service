@@ -1,0 +1,20 @@
+[Unit]
+Description=Runs the uboe keybase bot
+After=keybase.target
+
+[Service]
+Type=simple
+
+User=uboe
+Group=uboe
+UMask=007
+
+ExecStart=/home/uboe/keybase_bot/scripts/run_keybase_bot.sh
+
+Restart=on-failure
+
+# Configures the time to wait before service is stopped forcefully.
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target
