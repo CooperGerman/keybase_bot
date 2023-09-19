@@ -9,6 +9,7 @@
 ###################################
 
 import asyncio
+import json
 import logging as log
 import os
 import subprocess
@@ -18,9 +19,9 @@ import sys, textwrap, re
 # import colored_traceback.auto
 # import colored_traceback.always
 
-from multiprocessing import Process,Pipe
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
+from moonraker_connection import MoonrakerConnection
 
 log.basicConfig(level=log.DEBUG)
 
@@ -85,15 +86,19 @@ else:
         username="uboe_bot", paperkey=paperkey, handler=Handler()
     )
 
-def main(child_conn=None):
-    if child_conn:
-        msg = "Hello"
-        child_conn.send(msg)
-        child_conn.close()
+async def moonraker_test():
+    # load api_presets.json from ../common/api_presets.json
+    with open('/home/uboe/keybase_bot/common/api_presets.json', 'r') as file:
+        api_presets = json.load(file)
+    # create a moonraker connection
+    moonraker = MoonrakerConnection(sockpath='/home/uboe/printer_data/comms/moonraker.sock', presets=api_presets)
+    # connect to moonraker
+    await moonraker.run()
+
+def main():
+    # asyncio.run(moonraker_test())
     asyncio.run(bot.start(listen_options))
 
 if __name__ == "__main__":
     main()
-
-
 
