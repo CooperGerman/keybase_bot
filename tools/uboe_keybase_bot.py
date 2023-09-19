@@ -11,12 +11,14 @@
 import asyncio
 import logging as log
 import os
+import subprocess
 import sys, textwrap, re
 # import coloredlogs
 
 # import colored_traceback.auto
 # import colored_traceback.always
 
+from multiprocessing import Process,Pipe
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
 
@@ -28,7 +30,7 @@ class Handler:
             return
 
         # list all
-        if event.msg.sender == bot.username:
+        if event.msg.sender.username == bot.username:
             return
 
         channel = event.msg.channel
@@ -39,7 +41,7 @@ class Handler:
                     Hello there! I'm uboe_bot, a bot for print farm management.
                     I can help you with the following commands:
                         `help` - this help message
-                        `status` - get the status of the print farm
+                        `status` - display the printer's status
                     More commands coming soon!
                 """)
             #if event.msg.content.text.body == "/uboe_bot status" :
@@ -55,8 +57,7 @@ class Handler:
             else :
                 msg = "Command not recognized. Try `/uboe_bot help`"
 
-            await bot.chat.send(channel, msg+bot.username)
-
+            await bot.chat.send(channel, msg)
 
 #open the paperkey file from path given in argument
 with open(sys.argv[1], 'r') as file:
@@ -68,10 +69,31 @@ listen_options = {
     ]
 }
 
-bot = Bot(
-    username="uboe_bot", paperkey=paperkey, handler=Handler()
-)
 
-asyncio.run(bot.start(listen_options))
+# what linux user is running this script
+user = subprocess.run(['whoami'], stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
+log.info(f"Running as user: {user}")
+
+# if pidfile exists
+if os.path.isfile('/run/user/1000/keybase/keybased.pid'):
+    bot = Bot(
+        username="uboe_bot", paperkey=paperkey, handler=Handler(), pid_file='/run/user/1000/keybase/keybased.pid'
+    )
+    log.info("PID file exists")
+else:
+    bot = Bot(
+        username="uboe_bot", paperkey=paperkey, handler=Handler()
+    )
+
+def main(child_conn=None):
+    if child_conn:
+        msg = "Hello"
+        child_conn.send(msg)
+        child_conn.close()
+    asyncio.run(bot.start(listen_options))
+
+if __name__ == "__main__":
+    main()
+
 
 
