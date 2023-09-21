@@ -1,104 +1,111 @@
-#!/usr/bin/env python3
-
-###################################
-# WHAT IS IN THIS EXAMPLE?
-#
-# This bot listens to two channels for a special text message. When
-# it sees this message, it replies in the same channel with a response.
-# This also shows sending and receiving unicode characters.
-###################################
-
-import asyncio
+#!/bin/python3
+# -*- coding: utf-8 -*-
+'''
+###############################################################################
+##
+## 88        88 88
+## 88        88 88
+## 88        88 88
+## 88        88 88,dPPYba,   ,adPPYba,   ,adPPYba,
+## 88        88 88P'    "8a a8"     "8a a8P_____88
+## 88        88 88       d8 8b       d8 8PP"""""""
+## Y8a.    .a8P 88b,   ,a8" "8a,   ,a8" "8b,   ,aa
+##  `"Y8888Y"'  `"8Ybbd8"'   `"YbbdP"'   `"Ybbd8"'
+##
+###############################################################################
+## © Copyright 2023 Uboe S.A.S
+###############################################################################
+This is the main program, it fetches all spoolman filaments and generates a user
+profile folder for OrcaSliccer to point to when it starts.
+'''
 import json
 import logging as log
 import os
 import subprocess
 import sys, textwrap, re
-# import coloredlogs
+import coloredlogs
 
-# import colored_traceback.auto
-# import colored_traceback.always
+import colored_traceback.auto
+import colored_traceback.always
 
-import pykeybasebot.types.chat1 as chat1
-from pykeybasebot import Bot
-from moonraker_connection import MoonrakerConnection
+import argparse
+
+from moonraker_connection import KeybaseBot
 
 log.basicConfig(level=log.DEBUG)
 
-class Handler:
-    async def __call__(self, bot, event : chat1.Message):
-        if event.msg.content.type_name != chat1.MessageTypeStrings.TEXT.value:
-            return
 
-        # list all
-        if event.msg.sender.username == bot.username:
-            return
-
-        channel = event.msg.channel
-        if re.match(r'^/uboe_bot', event.msg.content.text.body):
-            # if "help" in event.msg.content.text.body :
-            if event.msg.content.text.body == "/uboe_bot help":
-                msg = textwrap.dedent("""
-                    Hello there! I'm uboe_bot, a bot for print farm management.
-                    I can help you with the following commands:
-                        `help` - this help message
-                        `status` - display the printer's status
-                    More commands coming soon!
-                """)
-            #if event.msg.content.text.body == "/uboe_bot status" :
-            elif event.msg.content.text.body == "/uboe_bot status" :
-                msg = textwrap.dedent(f"""
-                    {os.uname().nodename} is currently {os.getloadavg()[0]}% loaded.
-
-                """)
-
-            # if "🌴ping🌴" in event.msg.content.text.body :
-            elif "🌴ping🌴" in event.msg.content.text.body :
-                msg = "🍹PONG!🍹"
-            else :
-                msg = "Command not recognized. Try `/uboe_bot help`"
-
-            await bot.chat.send(channel, msg)
-
-#open the paperkey file from path given in argument
-with open(sys.argv[1], 'r') as file:
-    paperkey = file.read().replace('\n', '')
-
-listen_options = {
-    "filter-channels": [
-        {'name' : 'printhive', 'public' : None, 'members_type' : 'team', 'topic_type' : 'chat', 'topic_name' : "printfarm"}
-    ]
-}
-
-
-# what linux user is running this script
-user = subprocess.run(['whoami'], stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
-log.info(f"Running as user: {user}")
-
-# if pidfile exists
-if os.path.isfile('/run/user/1000/keybase/keybased.pid'):
-    bot = Bot(
-        username="uboe_bot", paperkey=paperkey, handler=Handler(), pid_file='/run/user/1000/keybase/keybased.pid'
+async def main():
+    banner = '''###############################################################################
+##
+## 88        88 88
+## 88        88 88
+## 88        88 88
+## 88        88 88,dPPYba,   ,adPPYba,   ,adPPYba,
+## 88        88 88P'    "8a a8"     "8a a8P_____88
+## 88        88 88       d8 8b       d8 8PP"""""""
+## Y8a.    .a8P 88b,   ,a8" "8a,   ,a8" "8b,   ,aa
+##  `"Y8888Y"'  `"8Ybbd8"'   `"YbbdP"'   `"Ybbd8"'
+##
+###############################################################################
+## © Copyright 2023 Uboe S.A.S
+###############################################################################
+'''
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawTextHelpFormatter,
+        prog='main.py',
+        description=banner,
+        epilog='''This is the main program, it fetches all spoolman filaments and generates a user
+        profile folder for OrcaSliccer to point to when it starts.'''
     )
-    log.info("PID file exists")
-else:
-    bot = Bot(
-        username="uboe_bot", paperkey=paperkey, handler=Handler()
+    parser.add_argument(
+        'paperkey',
+        type=str,
+        help='Keybase paperkey'
     )
+    parser.add_argument(
+        '--loglvl',
+        type=str,
+        default='info',
+        choices=['debug', 'info', 'warning', 'error', 'critical', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='Logging level'
+    )
+    loglvl = getattr(log, parser.parse_args().loglvl.upper())
+    args = parser.parse_args()
+    # configure logging with colored output
+    # Create a logger object.
+    logger = log.getLogger(__name__)
 
-async def moonraker_test():
+    # By default the install() function installs a handler on the root logger,
+    # this means that log messages from your code and log messages from the
+    # libraries that you use will all show up on the terminal.
+    coloredlogs.install(level=args.loglvl)
+
+    # If you don't want to see log messages from libraries, you can pass a
+    # specific logger object to the install() function. In this case only log
+    # messages originating from that logger will show up on the terminal.
+    coloredlogs.install(level=args.loglvl, logger=logger)
+
+    print(banner)
+    logger.info('Starting KeybaseBot.py')
+
+    # display a recap of the arguments
+    logger.info('='*80)
+    logger.info('Called with the following arguments:')
+    for arg in vars(args):
+        logger.info('	{}: {}'.format(arg, getattr(args, arg)))
+    logger.warning('Working on branch {}'.format(os.popen('git rev-parse --abbrev-ref HEAD').read().strip()))
+    logger.info('='*80)
+    # what linux user is running this script
+    user = subprocess.run(['whoami'], stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
+    log.info(f"Running as user: {user}")
     # load api_presets.json from ../common/api_presets.json
     with open('/home/uboe/keybase_bot/common/api_presets.json', 'r') as file:
         api_presets = json.load(file)
     # create a moonraker connection
-    moonraker = MoonrakerConnection(sockpath='/home/uboe/printer_data/comms/moonraker.sock', presets=api_presets)
+    kbBot = KeybaseBot(sockpath='/home/uboe/printer_data/comms/moonraker.sock', presets=api_presets)
     # connect to moonraker
-    await moonraker.run()
-
-def main():
-    # asyncio.run(moonraker_test())
-    asyncio.run(bot.start(listen_options))
+    await kbBot.run()
 
 if __name__ == "__main__":
     main()
-
