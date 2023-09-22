@@ -12,14 +12,17 @@ import ast
 import asyncio
 import pathlib
 import json
-import logging
+import shutil
 import textwrap
 import re
+import requests
 
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
 
 from typing import Any, Dict, List, Optional
+
+this_dir = os.path.dirname(os.path.abspath(__file__))
 
 SOCKET_LIMIT = 20 * 1024 * 1024
 MENU = [
@@ -96,30 +99,61 @@ class KeybaseBot:
             return
 
         channel = chat_event.msg.channel
-        if re.match(r'^/uboe_bot', chat_event.msg.content.text.body):
-            # if "help" in chat_event.msg.content.text.body :
-            if chat_event.msg.content.text.body == "/uboe_bot help":
-                msg = textwrap.dedent("""
-                    Hello there! I'm uboe_bot, a bot for print farm management.
-                    I can help you with the following commands:
-                        `help` - this help message
-                        `status` - display the printer's status
-                    More commands coming soon!
-                """)
-            #if chat_event.msg.content.text.body == "/uboe_bot status" :
-            elif chat_event.msg.content.text.body == "/uboe_bot status" :
-                msg = textwrap.dedent(f"""
-                    {os.uname().nodename} is currently {os.getloadavg()[0]}% loaded.
+        bot_command = re.match(r'(^/uboe_bot)', chat_event.msg.content.text.body)
+        if bot_command:
+            file = None
+            match = re.match(r'(^/uboe_bot)\s+(.*)', chat_event.msg.content.text.body)
+            if match:
+                if len(match.groups()) == 2:
+                    command = match.group(2)
+                    # if "help" in command :
+                    if command == "help":
+                        msg = textwrap.dedent("""
+                            Hello there! I'm uboe_bot, a bot for print farm management.
+                            I can help you with the following commands:
+                                `help` - this help message
+                                `status` - display the printer's status
+                            More commands coming soon!
+                        """)
+                    #if command == "status" :
+                    elif command == "status" :
+                        msg = textwrap.dedent(f"""
+                            {os.uname().nodename} is currently {os.getloadavg()[0]}% loaded.
 
-                """)
+                        """)
+                    #if command == "snapshot" :
+                    elif command == "snapshot" :
+                        self.logger.info(f"Fetching url for snapshot")
+                        snapchot_url = f'http://{self.hostname}'+await self.get_snapchot_url()
+                        # download image file from snaphot_url and embed into message
+                        self.logger.info(f"Downloading snapshot from {snapchot_url}")
+                        msg = "Snapshot"
+                        res = requests.get(snapchot_url, stream = True)
+                        if res.status_code == 200:
+                            file = os.path.join(this_dir, '..', 'tmp', 'snaphot.jpeg')
+                            if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
+                                os.makedirs(os.path.join(this_dir, '..', 'tmp'))
+                            with open(file,'wb') as f:
+                                shutil.copyfileobj(res.raw, f)
+                            self.logger.info('Image sucessfully Downloaded: snaphot.jpeg')
+                        else:
+                            self.logger.info('Image Couldn\'t be retrieved')
 
-            # if "🌴ping🌴" in chat_event.msg.content.text.body :
-            elif "🌴ping🌴" in chat_event.msg.content.text.body :
-                msg = "🍹PONG!🍹"
+
+                    # if "🌴ping🌴" == command :
+                    elif "🌴ping🌴" == command :
+                        msg = "🍹PONG!🍹"
+                    else :
+                        msg = "Command not recognized. Try `/uboe_bot help`"
+                else :
+                    msg = "Malformed command received. Try `/uboe_bot help`"
             else :
-                msg = "Command not recognized. Try `/uboe_bot help`"
+                msg = "Not command received. Try `/uboe_bot help`"
 
-            await bot.chat.send(channel, msg)
+            if not file :
+                await bot.chat.send(channel, msg)
+            else :
+                await bot.chat.attach(channel, file, msg)
 
     def run(self):
         self._loop = asyncio.get_event_loop()
@@ -264,6 +298,18 @@ class KeybaseBot:
         self.manual_entry = {}
         await self.print(f"Client Identified With Moonraker: {ret}")
 
+    async def get_snapchot_url(self) -> str:
+        self.manual_entry = {
+                    "method": "server.webcams.list",
+                    "params": {}
+                }
+        self.logger.debug(f"Sending : {self.manual_entry}")
+        ret = await self._send_manual_request(False)
+        self.logger.debug(f"Response: {ret}")
+        snapchot_url = ret['result']['webcams'][0]['snapshot_url']
+        self.manual_entry = {}
+        return snapchot_url
+
     async def _process_stream(
         self, reader: asyncio.StreamReader
     ) -> None:
@@ -292,31 +338,39 @@ class KeybaseBot:
             # CANCELLED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695313459.7578163, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'cancelled', 'start_time': 1695313285.310055, 'total_duration': 174.37510105301044, 'job_id': '00000F', 'exists': True}}]}
             # COMPLETED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695312127.3214107, 'filament_used': 8545.623679997632, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 6051.890782442992, 'status': 'completed', 'start_time': 1695305884.7087114, 'total_duration': 6242.467836786003, 'job_id': '00000E', 'exists': True}}]}
             # START: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'added', 'job': {'end_time': None, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'in_progress', 'start_time': 1695313479.608397, 'total_duration': 0.049926147010410205, 'job_id': '000010', 'exists': True}}]}
+
             # check the status of the job
             if 'method' in item and item['method'] != 'notify_proc_stat_update' :
                 self.logger.debug(f"Notification: {item}\n")
 
             # job completed
-            if 'method' in item and 'params' in item and 'action' in item['params'][0] and 'job' in item['params'][0] and 'status' in item['params'][0]['job']:
-                if item['method'] == 'notify_history_changed' and item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
-                    message = f"Job {item['params'][0]['job']['filename']} completed"
-                    await self.bot.chat.send(self.channel, message)
-                    self.logger.info(message)
-                # job cancelled
-                elif item['method'] == 'notify_history_changed' and item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
-                    message = f"Job {item['params'][0]['job']['filename']} cancelled"
-                    await self.bot.chat.send(self.channel, message)
-                    self.logger.info(message)
-                # job paused
-                elif item['method'] == 'notify_history_changed' and item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'paused':
-                    message = f"Job {item['params'][0]['job']['filename']} paused"
-                    await self.bot.chat.send(self.channel, message)
-                    self.logger.info(message)
-                # job started
-                elif item['method'] == 'notify_history_changed' and item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
-                    message = f"Machine {self.hostname} ==> Job {item['params'][0]['job']['filename']} started"
-                    await self.bot.chat.send(self.channel, message)
-                    self.logger.info(message)
+            if 'method' in item and item['method'] == 'notify_history_changed' :
+                # get webcam info (Sending: {'jsonrpc': '2.0', 'method': 'server.webcams.list', 'id': 140676070477984}
+                    # Response: {'jsonrpc': '2.0', 'result': {'webcams': [{'enabled': True, 'icon': 'mdiPrinter3d', 'aspect_ratio': '4:3', 'target_fps_idle': 15, 'name': 'bed', 'location': 'printer', 'service': 'mjpegstreamer-adaptive', 'target_fps': 15, 'stream_url': '/webcam/?action=stream', 'snapshot_url': '/webcam/?action=snapshot', 'flip_horizontal': False, 'flip_vertical': False, 'rotation': 0, 'source': 'database', 'extra_data': {}}]}, 'id': 140676070477984})
+
+                await self.get_snapchot_url()
+                # get the status of the job
+
+                if 'method' in item and 'params' in item and 'action' in item['params'][0] and 'job' in item['params'][0] and 'status' in item['params'][0]['job']:
+                    if item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
+                        message = f"Job {item['params'][0]['job']['filename']} completed"
+                        await self.bot.chat.send(self.channel, message)
+                        self.logger.info(message)
+                    # job cancelled
+                    elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
+                        message = f"Job {item['params'][0]['job']['filename']} cancelled"
+                        await self.bot.chat.send(self.channel, message)
+                        self.logger.info(message)
+                    # job paused
+                    elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'paused':
+                        message = f"Job {item['params'][0]['job']['filename']} paused"
+                        await self.bot.chat.send(self.channel, message)
+                        self.logger.info(message)
+                    # job started
+                    elif item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
+                        message = f"Machine {self.hostname} ==> Job {item['params'][0]['job']['filename']} started"
+                        await self.bot.chat.send(self.channel, message)
+                        self.logger.info(message)
 
         await self.print("Unix Socket Disconnection from _process_stream()")
         await self.close()
