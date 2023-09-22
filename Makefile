@@ -61,7 +61,7 @@ super_clean: clean
 	rm -rf ./env
 
 install_python_deps:
-	pip install -r requirements.txt
+	pip install -r tools/requirements.txt
 
 run: env
 	@echo "Pulling mirrors"
