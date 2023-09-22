@@ -30,7 +30,7 @@ import colored_traceback.always
 
 import argparse
 
-from moonraker_connection import KeybaseBot
+from KeybaseBot import KeybaseBot
 this_dir = os.path.dirname(os.path.abspath(__file__))
 
 log.basicConfig(level=log.DEBUG)
