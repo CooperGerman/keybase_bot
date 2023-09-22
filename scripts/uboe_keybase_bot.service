@@ -1,10 +1,11 @@
 [Unit]
 Description=Runs the uboe keybase bot
-After=network.target
+After=moonraker.target
 
 [Service]
 Type=simple
-
+Environment="FROM=SYSTEMD"
+WorkingDirectory=/home/uboe/keybase_bot/
 ExecStart=/home/uboe/keybase_bot/scripts/run_keybase_bot.sh
 
 Restart=on-failure
@@ -13,4 +14,4 @@ Restart=on-failure
 TimeoutStopSec=300
 
 [Install]
-RequiredBy=default.target
+WantedBy=multi-user.target

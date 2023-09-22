@@ -13,6 +13,8 @@ import asyncio
 import pathlib
 import json
 import logging
+import textwrap
+import re
 
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
@@ -26,62 +28,40 @@ MENU = [
     "Manual API Entry",
     "Start Notification View",
 ]
-listen_options = {
+LISTEN_OPTIONS = {
     "filter-channels": [
         {'name' : 'printhive', 'public' : None, 'members_type' : 'team', 'topic_type' : 'chat', 'topic_name' : "printfarm"}
     ]
 }
 
-# if pidfile exists
-if os.path.isfile('/run/user/1000/keybase/keybased.pid'):
-    bot = Bot(
-        username="uboe_bot", paperkey=paperkey, handler=Handler(), pid_file='/run/user/1000/keybase/keybased.pid'
-    )
-    log.info("PID file exists")
-else:
-    bot = Bot(
-        username="uboe_bot", paperkey=paperkey, handler=Handler()
-    )
-
-class Handler:
-    async def __call__(self, bot, event : chat1.Message):
-        if event.msg.content.type_name != chat1.MessageTypeStrings.TEXT.value:
-            return
-
-        # list all
-        if event.msg.sender.username == bot.username:
-            return
-
-        channel = event.msg.channel
-        if re.match(r'^/uboe_bot', event.msg.content.text.body):
-            # if "help" in event.msg.content.text.body :
-            if event.msg.content.text.body == "/uboe_bot help":
-                msg = textwrap.dedent("""
-                    Hello there! I'm uboe_bot, a bot for print farm management.
-                    I can help you with the following commands:
-                        `help` - this help message
-                        `status` - display the printer's status
-                    More commands coming soon!
-                """)
-            #if event.msg.content.text.body == "/uboe_bot status" :
-            elif event.msg.content.text.body == "/uboe_bot status" :
-                msg = textwrap.dedent(f"""
-                    {os.uname().nodename} is currently {os.getloadavg()[0]}% loaded.
-
-                """)
-
-            # if "🌴ping🌴" in event.msg.content.text.body :
-            elif "🌴ping🌴" in event.msg.content.text.body :
-                msg = "🍹PONG!🍹"
-            else :
-                msg = "Command not recognized. Try `/uboe_bot help`"
-
-            await bot.chat.send(channel, msg)
-
 class KeybaseBot:
     def __init__(
-        self, sockpath: pathlib.Path, presets: List[Dict[str, Any]]
+        self, sockpath: pathlib.Path, presets: List[Dict[str, Any]], paperkey: str, logger
     ) -> None:
+        self.logger = logger
+        # get paperkey from file
+        with open(paperkey, 'r') as file:
+            self.paperkey = file.read().replace('\n', '')
+
+        # if pidfile exists
+        self._loop = None
+        if os.path.isfile('/run/user/1000/keybase/keybased.pid'):
+            self.bot = Bot(
+                username="uboe_bot", paperkey=self.paperkey, handler=self, pid_file='/run/user/1000/keybase/keybased.pid', loop=self._loop
+            )
+            self.logger.info("PID file exists")
+        else:
+            self.bot = Bot(
+                username="uboe_bot", paperkey=self.paperkey, handler=self, loop=self._loop
+            )
+        self.channel = chat1.ChatChannel(
+            name=LISTEN_OPTIONS['filter-channels'][0]['name'],
+            public=LISTEN_OPTIONS['filter-channels'][0]['public'],
+            members_type=LISTEN_OPTIONS['filter-channels'][0]['members_type'],
+            topic_type=LISTEN_OPTIONS['filter-channels'][0]['topic_type'],
+            topic_name=LISTEN_OPTIONS['filter-channels'][0]['topic_name']
+        )
+        self.hostname = os.uname().nodename
         self.sockpath = sockpath
         self.api_presets = presets
         self.pending_req: Dict[str, Any] = {}
@@ -102,29 +82,51 @@ class KeybaseBot:
             [len(p.get("method", "")) for p in self.api_presets]
         )
 
-    async def run(self) -> None:
-        self._loop = asyncio.get_running_loop()
-        self._loop.add_reader(self.kb_fd, self._process_keyboard)
+    async def __call__(self, bot, chat_event : chat1.Message ):
+        if chat_event.msg.content.type_name != chat1.MessageTypeStrings.TEXT.value:
+            return
+
+        # list all
+        if chat_event.msg.sender.username == bot.username:
+            return
+
+        channel = chat_event.msg.channel
+        if re.match(r'^/uboe_bot', chat_event.msg.content.text.body):
+            # if "help" in chat_event.msg.content.text.body :
+            if chat_event.msg.content.text.body == "/uboe_bot help":
+                msg = textwrap.dedent("""
+                    Hello there! I'm uboe_bot, a bot for print farm management.
+                    I can help you with the following commands:
+                        `help` - this help message
+                        `status` - display the printer's status
+                    More commands coming soon!
+                """)
+            #if chat_event.msg.content.text.body == "/uboe_bot status" :
+            elif chat_event.msg.content.text.body == "/uboe_bot status" :
+                msg = textwrap.dedent(f"""
+                    {os.uname().nodename} is currently {os.getloadavg()[0]}% loaded.
+
+                """)
+
+            # if "🌴ping🌴" in chat_event.msg.content.text.body :
+            elif "🌴ping🌴" in chat_event.msg.content.text.body :
+                msg = "🍹PONG!🍹"
+            else :
+                msg = "Command not recognized. Try `/uboe_bot help`"
+
+            await bot.chat.send(channel, msg)
+
+    def run(self):
+        self._loop = asyncio.get_event_loop()
+        self._loop.create_task(self.run_bot())
+        self._loop.create_task(self.run_moonraker())
+        self._loop.run_forever()
+
+    async def run_bot(self):
+        asyncio.run(await self.bot.start(listen_options=LISTEN_OPTIONS))
+
+    async def run_moonraker(self) -> None:
         await self._connect()
-        while True:
-            try:
-                if self.mode == 0:
-                    if self.need_print_help:
-                        self.need_print_help = False
-                        await self._print_help()
-                    await self._mode_menu()
-                elif self.mode == 1:
-                    await self._mode_select_preset()
-                elif self.mode in (2, 3, 4):
-                    await self._mode_manual_entry()
-                elif self.mode == 5:
-                    await self._mode_watch_notify()
-                else:
-                    await self.print(f"Invalid mode: {self.mode}")
-            except Exception:
-                logging.exception("Unix Test Error")
-                await self.close()
-                break
 
     async def _mode_menu(self) -> None:
         req = await self.input("Menu Index (? for Help): ")
@@ -282,6 +284,24 @@ class KeybaseBot:
                     fut.set_result(item)
             elif self.print_notifications:
                 self._loop.create_task(self.print(f"Notification: {item}\n"))
+            # CANCELLED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695313459.7578163, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'cancelled', 'start_time': 1695313285.310055, 'total_duration': 174.37510105301044, 'job_id': '00000F', 'exists': True}}]}
+            # COMPLETED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695312127.3214107, 'filament_used': 8545.623679997632, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 6051.890782442992, 'status': 'completed', 'start_time': 1695305884.7087114, 'total_duration': 6242.467836786003, 'job_id': '00000E', 'exists': True}}]}
+            # START: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'added', 'job': {'end_time': None, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'in_progress', 'start_time': 1695313479.608397, 'total_duration': 0.049926147010410205, 'job_id': '000010', 'exists': True}}]}
+            # check the status of the job
+            # job completed
+            if 'method' in item and 'params' in item and 'action' in item['params'][0] and 'job' in item['params'][0] and 'status' in item['params'][0]['job']:
+                if item['method'] == 'notify_history_changed' and item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
+                    message = f"Machine {self.hostname} ==> Job {item['params'][0]['job']['job_id']} completed"
+                    await self.bot.chat.send(self.channel, message)
+                # job cancelled
+                elif item['method'] == 'notify_history_changed' and item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
+                    message = f"Machine {self.hostname} ==> Job {item['params'][0]['job']['job_id']} cancelled"
+                    await self.bot.chat.send(self.channel, message)
+                # job started
+                elif item['method'] == 'notify_history_changed' and item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
+                    message = f"Machine {self.hostname} ==> Job {item['params'][0]['job']['job_id']} started"
+                    await self.bot.chat.send(self.channel, message)
+
         await self.print("Unix Socket Disconnection from _process_stream()")
         await self.close()
 

@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/bin/python3.7
 # -*- coding: utf-8 -*-
 '''
 ###############################################################################
@@ -18,7 +18,7 @@
 This is the main program, it fetches all spoolman filaments and generates a user
 profile folder for OrcaSliccer to point to when it starts.
 '''
-import json
+import json, asyncio
 import logging as log
 import os
 import subprocess
@@ -31,11 +31,12 @@ import colored_traceback.always
 import argparse
 
 from moonraker_connection import KeybaseBot
+this_dir = os.path.dirname(os.path.abspath(__file__))
 
 log.basicConfig(level=log.DEBUG)
 
 
-async def main():
+def main():
     banner = '''###############################################################################
 ##
 ## 88        88 88
@@ -87,6 +88,18 @@ async def main():
     coloredlogs.install(level=args.loglvl, logger=logger)
 
     print(banner)
+
+    # set the logger up to log into a file aswell as the console
+    # create a file handler
+    handler = log.FileHandler(os.path.join(this_dir, '..', 'logs','keybase_bot.log'))
+    handler.setLevel(loglvl)
+    # create a logging format
+    formatter = log.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    # add the handlers to the logger
+    logger.addHandler(handler)
+    # log the start of the program
+
     logger.info('Starting KeybaseBot.py')
 
     # display a recap of the arguments
@@ -103,9 +116,9 @@ async def main():
     with open('/home/uboe/keybase_bot/common/api_presets.json', 'r') as file:
         api_presets = json.load(file)
     # create a moonraker connection
-    kbBot = KeybaseBot(sockpath='/home/uboe/printer_data/comms/moonraker.sock', presets=api_presets)
+    kbBot = KeybaseBot(sockpath='/home/uboe/printer_data/comms/moonraker.sock', presets=api_presets, paperkey=args.paperkey ,logger=logger)
     # connect to moonraker
-    await kbBot.run()
+    kbBot.run()
 
 if __name__ == "__main__":
     main()
