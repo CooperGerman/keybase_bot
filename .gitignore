@@ -1,4 +1,5 @@
 .venv
 logs
 temp
+tmp
 __pycache__

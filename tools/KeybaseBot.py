@@ -1,9 +1,25 @@
-#! /usr/bin/python3
-# Unix Domain Socket Connection Test for Moonraker
-#
-# Copyright (C) 2022 Eric Callahan <arksine.code@gmail.com>
-#
-# This file may be distributed under the terms of the GNU GPLv3 license
+#!/bin/python3
+# -*- coding: utf-8 -*-
+'''
+###############################################################################
+##
+## 88        88 88
+## 88        88 88
+## 88        88 88
+## 88        88 88,dPPYba,   ,adPPYba,   ,adPPYba,
+## 88        88 88P'    "8a a8"     "8a a8P_____88
+## 88        88 88       d8 8b       d8 8PP"""""""
+## Y8a.    .a8P 88b,   ,a8" "8a,   ,a8" "8b,   ,aa
+##  `"Y8888Y"'  `"8Ybbd8"'   `"YbbdP"'   `"Ybbd8"'
+##
+###############################################################################
+## © Copyright 2023 Uboe S.A.S
+###############################################################################
+This is the main program, it creates a KeybasBot instance and starts it.
+Heavily inspired by :
+    - https://github.com/Arksine/moontest/blob/master/scripts/unix_socket_test.py
+    - https://github.com/keybase/pykeybasebot/blob/master/examples/1_pingpong.py
+'''
 from __future__ import annotations
 import os
 import sys
@@ -84,10 +100,12 @@ class KeybaseBot:
         self.max_method_len: int = max(
             [len(p.get("method", "")) for p in self.api_presets]
         )
+        self.snap_file = os.path.join(this_dir, '..', 'tmp', 'snaphot.jpeg')
         self.header_message = textwrap.dedent(f"""
-            Keybase Bot for Moonraker
-            =========================
-            Hostname: {self.hostname}
+            * ========================= *
+            * Keybase Bot for Moonraker *
+            * ========================= *
+            * Hostname: `{self.hostname}` *
             """)
 
     async def __call__(self, bot, chat_event : chat1.Message ):
@@ -100,11 +118,11 @@ class KeybaseBot:
 
         channel = chat_event.msg.channel
         bot_command = re.match(r'(^/uboe_bot)', chat_event.msg.content.text.body)
-        if bot_command:
+        if bot_command :
             file = None
             match = re.match(r'(^/uboe_bot)\s+(.*)', chat_event.msg.content.text.body)
-            if match:
-                if len(match.groups()) == 2:
+            if match :
+                if len(match.groups()) == 2 :
                     command = match.group(2)
                     # if "help" in command :
                     if command == "help":
@@ -113,32 +131,30 @@ class KeybaseBot:
                             I can help you with the following commands:
                                 `help` - this help message
                                 `status` - display the printer's status
+                                `snapshot` - display the printer's snapshot
+                                `emergency_stop` - emergency stop
                             More commands coming soon!
                         """)
                     #if command == "status" :
                     elif command == "status" :
-                        msg = textwrap.dedent(f"""
-                            {os.uname().nodename} is currently {os.getloadavg()[0]}% loaded.
-
-                        """)
+                        msg = await self.kb_status_msg()
+                        file = self.snap_file
                     #if command == "snapshot" :
                     elif command == "snapshot" :
-                        self.logger.info(f"Fetching url for snapshot")
-                        snapchot_url = f'http://{self.hostname}'+await self.get_snapchot_url()
-                        # download image file from snaphot_url and embed into message
-                        self.logger.info(f"Downloading snapshot from {snapchot_url}")
-                        msg = "Snapshot"
-                        res = requests.get(snapchot_url, stream = True)
-                        if res.status_code == 200:
-                            file = os.path.join(this_dir, '..', 'tmp', 'snaphot.jpeg')
-                            if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
-                                os.makedirs(os.path.join(this_dir, '..', 'tmp'))
-                            with open(file,'wb') as f:
-                                shutil.copyfileobj(res.raw, f)
-                            self.logger.info('Image sucessfully Downloaded: snaphot.jpeg')
-                        else:
-                            self.logger.info('Image Couldn\'t be retrieved')
+                        msg = "Requested snaphot:"
+                        await self.get_snapshot()
+                        file = self.snap_file
 
+                    elif command == "emergency_stop" :
+                        msg = "Emergency stop requested"
+                        self.manual_entry = {
+                            "method": "printer.emergency_stop",
+                            "params": {}
+                        }
+                        self.logger.debug(f"Sending : {self.manual_entry}")
+                        ret = await self._send_manual_request()
+                        self.logger.debug(f"Response: {ret}")
+                        self.manual_entry = {}
 
                     # if "🌴ping🌴" == command :
                     elif "🌴ping🌴" == command :
@@ -150,10 +166,15 @@ class KeybaseBot:
             else :
                 msg = "Not command received. Try `/uboe_bot help`"
 
-            if not file :
-                await bot.chat.send(channel, msg)
+            if not file:
+                await bot.chat.send(channel, self.header_message + msg)
             else :
-                await bot.chat.attach(channel, file, msg)
+                await bot.chat.attach(channel, file, self.header_message+msg)
+
+    async def pending_status_message(self, message):
+        self.logger.info(f"Sending message: {message}")
+        await self.get_snapshot()
+        await self.bot.chat.attach(self.channel, self.snap_file, self.header_message+message)
 
     def run(self):
         self._loop = asyncio.get_event_loop()
@@ -161,112 +182,36 @@ class KeybaseBot:
         self._loop.create_task(self.run_moonraker())
         self._loop.run_forever()
 
+    async def kb_status_msg(self):
+        status = await self.get_printer_status()
+        # Status: {'jsonrpc': '2.0', 'result': {'eventtime': 267760.750332633, 'status': {'print_stats': {'filename': 'cable_tie_PLA_7m50s.gcode', 'total_duration': 281.22244369098917, 'print_duration': 0.0, 'filament_used': 0.0, 'state': 'paused', 'message': '', 'info': {'total_layer': 9, 'current_layer': 0}}}}, 'id': 140316437579168}
+        # convert duration in seconds to HH:MM:SS
+        def convert(seconds):
+            seconds = seconds % (24 * 3600)
+            hour = seconds // 3600
+            seconds %= 3600
+            minutes = seconds // 60
+            seconds %= 60
+            return "%d:%02d:%02d" % (hour, minutes, seconds)
+
+        msg = textwrap.dedent(f"""
+            >`State          :` {status['result']['status']['print_stats']['state']}
+            >`Filename       :` {status['result']['status']['print_stats']['filename']}
+            >`Message        :` {status['result']['status']['print_stats']['message']}
+            >`Total duration :` {convert(status['result']['status']['print_stats']['total_duration'])}
+            >`Print duration :` {convert(status['result']['status']['print_stats']['print_duration'])}
+            >`Filament used  :` {status['result']['status']['print_stats']['filament_used']}
+            >`Total layer    :` {status['result']['status']['print_stats']['info']['total_layer']}
+            >`Current layer  :` {status['result']['status']['print_stats']['info']['current_layer']}
+        """)
+        await self.get_snapshot()
+        return msg
+
     async def run_bot(self):
         asyncio.run(await self.bot.start(listen_options=LISTEN_OPTIONS))
 
     async def run_moonraker(self) -> None:
         await self._connect()
-
-    async def _mode_menu(self) -> None:
-        req = await self.input("Menu Index (? for Help): ")
-        if req == "1":
-            await self._print_presets()
-        elif req == "2":
-            self.mode = 1
-        elif req == "3":
-            self.manual_entry = {}
-            self.mode = 2
-        elif req == "4":
-            self.mode = 5
-        else:
-            if req != "?":
-                await self.print(f"Invalid Entry: {req}")
-            await self._print_help()
-
-    async def _mode_select_preset(self) -> None:
-        req = await self.input("Preset Index (Press Enter to return to main menu): ")
-        if not req:
-            self.mode = 0
-            self.need_print_help = True
-            return
-        if not req.isdigit():
-            await self.print(f"Error: invalid selection {req}")
-            return
-        ret = await self._send_preset(int(req) - 1)
-        if ret:
-            await self.print(f"Response: {ret}\n")
-
-    async def _mode_manual_entry(self) -> None:
-        if self.mode == 2:
-            req = await self.input("Method Name (Press Enter to return to main menu): ")
-            if not req:
-                self.mode = 0
-                self.need_print_help = True
-                self.manual_entry = {}
-                return
-            self.manual_entry["method"] = req
-            self.mode = 3
-        elif self.mode == 3:
-            if "params" not in self.manual_entry:
-                self.manual_entry["params"] = {}
-            req = await self.input("Parameter Name (Press Enter to send request): ")
-            if not req:
-                # send request and print response
-                ret = await self._send_manual_request()
-                await self.print(f"Response: {ret}\n")
-                self.manual_entry = {}
-                self.mode = 2
-                return
-            self.manual_entry["params"][req] = None
-            self.mode = 4
-        elif self.mode == 4:
-            params: Dict[str, Any] = self.manual_entry.get("params", {})
-            if not params:
-                self.mode = 3
-                return
-            last_key = list(params.keys())[-1]
-            req = await self.input(f"Parameter '{last_key}' Value: ")
-            if not req:
-                await self.print(f"No value selected, removing parameter {last_key}")
-                params.pop(last_key, None)
-            else:
-                try:
-                    val = ast.literal_eval(req)
-                except Exception as e:
-                    await self.print(f"Error: invalid value {req}, raised {e}")
-                    return
-                params[last_key] = val
-            self.mode = 3
-
-    async def _mode_watch_notify(self) -> None:
-        await self.print("Watching notifications, Press Enter to stop")
-        await asyncio.sleep(1.)
-        self.print_notifications = True
-        ret = await self.input()
-        self.print_notifications = False
-        self.mode = 0
-        self.need_print_help = True
-
-    async def _print_help(self) -> None:
-        msg = "\nMain Menu:\nIndex     Description"
-        for idx, desc in enumerate(MENU):
-            msg += f"\n{idx + 1:<10}{desc}"
-        msg += (
-            "\n?         Help (show this message)"
-            "\nCTRL+C    Quit this application\n"
-        )
-        await self.print(msg)
-
-    async def _print_presets(self) -> None:
-        msg = (
-            "\nAvailable API Presets\nIndex   "
-            f"{'Method':<{self.max_method_len}}Params"
-        )
-        for idx, preset in enumerate(self.api_presets):
-            method = preset.get("method", "invalid")
-            params = preset.get("params", "")
-            msg += f"\n{idx + 1:<10}{method:<{self.max_method_len}}{params}"
-        await self.print(msg + "\n")
 
     async def _connect(self) -> None:
         print(f"Connecting to Moonraker at {self.sockpath}")
@@ -284,7 +229,7 @@ class KeybaseBot:
         self.writer = writer
         self._loop.create_task(self._process_stream(reader))
         self.connected = True
-        await self.print("Connected to Moonraker")
+        self.logger.info("Connected to Moonraker")
         self.manual_entry = {
             "method": "server.connection.identify",
             "params": {
@@ -294,9 +239,41 @@ class KeybaseBot:
                 "url": "https://github.com/Arksine/moontest"
             }
         }
-        ret = await self._send_manual_request(False)
+        ret = await self._send_manual_request()
         self.manual_entry = {}
-        await self.print(f"Client Identified With Moonraker: {ret}")
+        self.logger.info(f"Client Identified With Moonraker: {ret}")
+
+    async def get_printer_status(self) -> None:
+        # Sending: {'jsonrpc': '2.0', 'method': 'printer.objects.list', 'id': 139689691991728}
+        # Response: {'jsonrpc': '2.0', 'result': {'objects': ['webhooks', 'configfile', 'mcu', 'gcode_move', 'print_stats', 'virtual_sdcard', 'pause_resume', 'display_status', 'gcode_macro CANCEL_PRINT', ..., 'motion_report', 'query_endstops', 'system_stats', 'manual_probe', 'toolhead', 'extruder']}, 'id': 139689691991728}
+        self.manual_entry = {
+                    "method": "printer.objects.query",
+                    "params": {'objects' : {'print_stats' : None}}
+                }
+        self.logger.debug(f"Sending : {self.manual_entry}")
+        ret = await self._send_manual_request()
+        self.logger.debug(f"Response: {ret}")
+        self.manual_entry = {}
+        return ret
+
+    async def get_snapshot(self) -> None:
+        self.logger.info(f"Fetching url for snapshot")
+        url = await self.get_snapchot_url()
+        snapchot_url = f'http://{self.hostname}'+url
+        # download image file from snaphot_url and embed into message
+        self.logger.info(f"Downloading snapshot from {snapchot_url}")
+        msg = "Snapshot"
+        res = requests.get(snapchot_url, stream = True)
+        self.logger.debug(f"Response: {res}")
+        if res.status_code == 200:
+            if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
+                os.makedirs(os.path.join(this_dir, '..', 'tmp'))
+            with open(self.snap_file,'wb') as f:
+                shutil.copyfileobj(res.raw, f)
+            self.logger.info('Image sucessfully Downloaded: snaphot.jpeg')
+        else:
+            self.logger.info('Image Couldn\'t be retrieved')
+        return self.snap_file
 
     async def get_snapchot_url(self) -> str:
         self.manual_entry = {
@@ -304,7 +281,7 @@ class KeybaseBot:
                     "params": {}
                 }
         self.logger.debug(f"Sending : {self.manual_entry}")
-        ret = await self._send_manual_request(False)
+        ret = await self._send_manual_request()
         self.logger.debug(f"Response: {ret}")
         snapchot_url = ret['result']['webcams'][0]['snapshot_url']
         self.manual_entry = {}
@@ -338,41 +315,31 @@ class KeybaseBot:
             # CANCELLED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695313459.7578163, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'cancelled', 'start_time': 1695313285.310055, 'total_duration': 174.37510105301044, 'job_id': '00000F', 'exists': True}}]}
             # COMPLETED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695312127.3214107, 'filament_used': 8545.623679997632, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 6051.890782442992, 'status': 'completed', 'start_time': 1695305884.7087114, 'total_duration': 6242.467836786003, 'job_id': '00000E', 'exists': True}}]}
             # START: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'added', 'job': {'end_time': None, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'in_progress', 'start_time': 1695313479.608397, 'total_duration': 0.049926147010410205, 'job_id': '000010', 'exists': True}}]}
-
+            message = None
             # check the status of the job
-            if 'method' in item and item['method'] != 'notify_proc_stat_update' :
+            if 'method' in item and item['method'] in  ['notify_history_changed'] :
                 self.logger.debug(f"Notification: {item}\n")
 
-            # job completed
             if 'method' in item and item['method'] == 'notify_history_changed' :
                 # get webcam info (Sending: {'jsonrpc': '2.0', 'method': 'server.webcams.list', 'id': 140676070477984}
                     # Response: {'jsonrpc': '2.0', 'result': {'webcams': [{'enabled': True, 'icon': 'mdiPrinter3d', 'aspect_ratio': '4:3', 'target_fps_idle': 15, 'name': 'bed', 'location': 'printer', 'service': 'mjpegstreamer-adaptive', 'target_fps': 15, 'stream_url': '/webcam/?action=stream', 'snapshot_url': '/webcam/?action=snapshot', 'flip_horizontal': False, 'flip_vertical': False, 'rotation': 0, 'source': 'database', 'extra_data': {}}]}, 'id': 140676070477984})
 
-                await self.get_snapchot_url()
-                # get the status of the job
+                if item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
+                    message = f"Job {item['params'][0]['job']['filename']} completed"
+                # job cancelled
+                elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
+                    message = f"Job {item['params'][0]['job']['filename']} cancelled"
+                # job paused
+                elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'paused':
+                    message = f"Job {item['params'][0]['job']['filename']} paused"
+                # job started
+                elif item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
+                    message = f"Job {item['params'][0]['job']['filename']} started"
 
-                if 'method' in item and 'params' in item and 'action' in item['params'][0] and 'job' in item['params'][0] and 'status' in item['params'][0]['job']:
-                    if item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
-                        message = f"Job {item['params'][0]['job']['filename']} completed"
-                        await self.bot.chat.send(self.channel, message)
-                        self.logger.info(message)
-                    # job cancelled
-                    elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
-                        message = f"Job {item['params'][0]['job']['filename']} cancelled"
-                        await self.bot.chat.send(self.channel, message)
-                        self.logger.info(message)
-                    # job paused
-                    elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'paused':
-                        message = f"Job {item['params'][0]['job']['filename']} paused"
-                        await self.bot.chat.send(self.channel, message)
-                        self.logger.info(message)
-                    # job started
-                    elif item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
-                        message = f"Machine {self.hostname} ==> Job {item['params'][0]['job']['filename']} started"
-                        await self.bot.chat.send(self.channel, message)
-                        self.logger.info(message)
+            if message :
+                self._loop.create_task(self.pending_status_message(message))
 
-        await self.print("Unix Socket Disconnection from _process_stream()")
+        self.logger.info("Unix Socket Disconnection from _process_stream()")
         await self.close()
 
     def _make_rpc_msg(self, method: str, **kwargs) -> Dict[str, Any]:
@@ -384,9 +351,7 @@ class KeybaseBot:
             msg["params"] = kwargs
         return msg
 
-    async def _send_manual_request(
-        self, echo_request: bool = True
-    ) -> Dict[str, Any]:
+    async def _send_manual_request(self) -> Dict[str, Any]:
         if not self.manual_entry:
             return
         params = self.manual_entry.get("params")
@@ -394,18 +359,16 @@ class KeybaseBot:
         message = self._make_rpc_msg(method, **params)
         fut = self._loop.create_future()
         self.pending_reqs[message["id"]] = fut
-        if echo_request:
-            await self.print(f"Sending: {message}")
         await self._write_message(message)
         return await fut
 
     async def _send_preset(self, index: int) -> Dict[str, Any]:
         if index < 0 or index >= len(self.api_presets):
-            await self.print(f"Error: Preset index {index} out of range.")
+            self.logger.info(f"Error: Preset index {index} out of range.")
             return {}
         preset = self.api_presets[index]
         if "method" not in self.api_presets[index]:
-            await self.print(f"Error: Invalid Preset {preset}")
+            self.logger.info(f"Error: Invalid Preset {preset}")
             return
         params: Dict[str, Any] = preset.get("params", {})
         if not isinstance(params, dict):
@@ -413,7 +376,7 @@ class KeybaseBot:
         message = self._make_rpc_msg(preset["method"], **params)
         fut = self._loop.create_future()
         self.pending_reqs[message["id"]] = fut
-        await self.print(f"Sending: {message}")
+        self.logger.info(f"Sending: {message}")
         await self._write_message(message)
         return await fut
 
@@ -427,78 +390,9 @@ class KeybaseBot:
         except Exception:
             await self.close()
 
-    async def input(self, prompt: str = "") -> str:
-        if prompt:
-            await self.print(prompt, is_line=False)
-        self.kb_fut = self._loop.create_future()
-        ret = await self.kb_fut
-        self.kb_fut = None
-        return ret
-
-    async def print(self, message: str, is_line: bool = True) -> None:
-        async with self.print_lock:
-            if is_line:
-                message += "\n"
-            while message:
-                fut = self._loop.create_future()
-                self._loop.add_writer(self.out_fd, self._req_stdout, fut)
-                await fut
-                ret = sys.stdout.write(message)
-                message = message[ret:]
-            sys.stdout.flush()
-
-    def _req_stdout(self, fut: asyncio.Future) -> None:
-        fut.set_result(None)
-        self._loop.remove_writer(self.out_fd)
-
-    def _process_keyboard(self) -> None:
-        data = os.read(self.kb_fd, 4096)
-        parts = data.split(b"\n", 1)
-        parts[0] = self.kb_buf + parts[0]
-        self.kb_buf = parts.pop()
-        if parts and self.kb_fut is not None:
-            self.kb_fut.set_result(parts[0].decode())
-
     async def close(self):
         if not self.connected:
             return
         self.connected = False
         self.writer.close()
         await self.writer.wait_closed()
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Unix Socket Test Utility")
-    parser.add_argument(
-        "-s", "--socketfile", default="~/printer_data/comms/moonraker.sock",
-        metavar='<socketfile>',
-        help="Path to Moonraker Unix Domain Socket"
-    )
-    parser.add_argument(
-        "-p", "--presets", default=None, metavar='<presetfile>',
-        help="Path to API Presets Json File"
-    )
-    args = parser.parse_args()
-    sockpath = pathlib.Path(args.socketfile).expanduser().resolve()
-    pfile: Optional[str] = args.presets
-    if pfile is None:
-        parent = pathlib.Path(__file__).parent
-        presetpath = parent.joinpath("unix_api_presets.json")
-    else:
-        presetpath = pathlib.Path(args.presets).expanduser().resolve()
-    presets: List[Dict[str, Any]] = []
-    if presetpath.exists():
-        try:
-            presets = json.loads(presetpath.read_text())
-        except Exception:
-            print(f"Failed to load API Presets from file {presetpath}")
-        else:
-            if not isinstance(presets, list):
-                print(f"Invalid JSON object in preset file {presetpath}")
-                presets = []
-    conn = KeybaseBot(sockpath, presets)
-    try:
-        asyncio.run(conn.run())
-    except KeyboardInterrupt:
-        print("\n")
-        pass
