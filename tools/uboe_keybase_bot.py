@@ -92,6 +92,9 @@ def main():
     # set the logger up to log into a file aswell as the console
     # create a file handler
     handler = log.FileHandler(os.path.join(this_dir, '..', 'logs','keybase_bot.log'))
+    # clear the file
+    open(os.path.join(this_dir, '..', 'logs','keybase_bot.log'), 'w').close()
+    # set the logging level
     handler.setLevel(loglvl)
     # create a logging format
     formatter = log.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
