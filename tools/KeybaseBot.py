@@ -57,12 +57,20 @@ class KeybaseBot:
     def __init__(
         self, sockpath: pathlib.Path, presets: List[Dict[str, Any]], paperkey: str, logger
     ) -> None:
+        '''
+        The class represents a Keybase bot that connects to Moonraker via a Unix Socket and to keybase via the keybase bot API.
+        It is used to send messages to the keybase channel and to send commands or receive notifications from Moonraker.
+        @param sockpath: Path to the Unix Socket
+        @param presets: List of API presets to send to Moonraker
+        @param paperkey: Keybase paperkey
+        @param logger: Logger instance
+        '''
         self.logger = logger
         # get paperkey from file
         with open(paperkey, 'r') as file:
             self.paperkey = file.read().replace('\n', '')
 
-        # if pidfile exists
+        # if pidfile exists use it to connect the bot
         self._loop = None
         if os.path.isfile('/run/user/1000/keybase/keybased.pid'):
             self.bot = Bot(
@@ -109,6 +117,11 @@ class KeybaseBot:
             """)
 
     async def __call__(self, bot, chat_event : chat1.Message ):
+        '''
+        Handler for keybase bot. It is called when a message is received on the keybase channel.
+        @param bot: Keybase bot instance
+        @param chat_event: Keybase chat event
+        '''
         if chat_event.msg.content.type_name != chat1.MessageTypeStrings.TEXT.value:
             return
 
@@ -171,125 +184,15 @@ class KeybaseBot:
             else :
                 await bot.chat.attach(channel, file, self.header_message+msg)
 
-    async def pending_status_message(self, message):
-        self.logger.info(f"Sending message: {message}")
-        await self.get_snapshot()
-        await self.bot.chat.attach(self.channel, self.snap_file, self.header_message+message)
-
-    def run(self):
-        self._loop = asyncio.get_event_loop()
-        self._loop.create_task(self.run_bot())
-        self._loop.create_task(self.run_moonraker())
-        self._loop.run_forever()
-
-    async def kb_status_msg(self):
-        status = await self.get_printer_status()
-        # Status: {'jsonrpc': '2.0', 'result': {'eventtime': 267760.750332633, 'status': {'print_stats': {'filename': 'cable_tie_PLA_7m50s.gcode', 'total_duration': 281.22244369098917, 'print_duration': 0.0, 'filament_used': 0.0, 'state': 'paused', 'message': '', 'info': {'total_layer': 9, 'current_layer': 0}}}}, 'id': 140316437579168}
-        # convert duration in seconds to HH:MM:SS
-        def convert(seconds):
-            seconds = seconds % (24 * 3600)
-            hour = seconds // 3600
-            seconds %= 3600
-            minutes = seconds // 60
-            seconds %= 60
-            return "%d:%02d:%02d" % (hour, minutes, seconds)
-
-        msg = textwrap.dedent(f"""
-            >`State          :` {status['result']['status']['print_stats']['state']}
-            >`Filename       :` {status['result']['status']['print_stats']['filename']}
-            >`Message        :` {status['result']['status']['print_stats']['message']}
-            >`Total duration :` {convert(status['result']['status']['print_stats']['total_duration'])}
-            >`Print duration :` {convert(status['result']['status']['print_stats']['print_duration'])}
-            >`Filament used  :` {status['result']['status']['print_stats']['filament_used']}
-            >`Total layer    :` {status['result']['status']['print_stats']['info']['total_layer']}
-            >`Current layer  :` {status['result']['status']['print_stats']['info']['current_layer']}
-        """)
-        await self.get_snapshot()
-        return msg
-
-    async def run_bot(self):
-        asyncio.run(await self.bot.start(listen_options=LISTEN_OPTIONS))
-
-    async def run_moonraker(self) -> None:
-        await self._connect()
-
-    async def _connect(self) -> None:
-        print(f"Connecting to Moonraker at {self.sockpath}")
-        while True:
-            try:
-                reader, writer = await asyncio.open_unix_connection(
-                    self.sockpath, limit=SOCKET_LIMIT
-                )
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                await asyncio.sleep(1.)
-                continue
-            break
-        self.writer = writer
-        self._loop.create_task(self._process_stream(reader))
-        self.connected = True
-        self.logger.info("Connected to Moonraker")
-        self.manual_entry = {
-            "method": "server.connection.identify",
-            "params": {
-                "client_name": "Unix Socket Test",
-                "version": "0.0.1",
-                "type": "other",
-                "url": "https://github.com/Arksine/moontest"
-            }
-        }
-        ret = await self._send_manual_request()
-        self.manual_entry = {}
-        self.logger.info(f"Client Identified With Moonraker: {ret}")
-
-    async def get_printer_status(self) -> None:
-        # Sending: {'jsonrpc': '2.0', 'method': 'printer.objects.list', 'id': 139689691991728}
-        # Response: {'jsonrpc': '2.0', 'result': {'objects': ['webhooks', 'configfile', 'mcu', 'gcode_move', 'print_stats', 'virtual_sdcard', 'pause_resume', 'display_status', 'gcode_macro CANCEL_PRINT', ..., 'motion_report', 'query_endstops', 'system_stats', 'manual_probe', 'toolhead', 'extruder']}, 'id': 139689691991728}
-        self.manual_entry = {
-                    "method": "printer.objects.query",
-                    "params": {'objects' : {'print_stats' : None}}
-                }
-        self.logger.debug(f"Sending : {self.manual_entry}")
-        ret = await self._send_manual_request()
-        self.logger.debug(f"Response: {ret}")
-        self.manual_entry = {}
-        return ret
-
-    async def get_snapshot(self) -> None:
-        self.logger.info(f"Fetching url for snapshot")
-        url = await self.get_snapchot_url()
-        snapchot_url = f'http://{self.hostname}'+url
-        # download image file from snaphot_url and embed into message
-        self.logger.info(f"Downloading snapshot from {snapchot_url}")
-        msg = "Snapshot"
-        res = requests.get(snapchot_url, stream = True)
-        self.logger.debug(f"Response: {res}")
-        if res.status_code == 200:
-            if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
-                os.makedirs(os.path.join(this_dir, '..', 'tmp'))
-            with open(self.snap_file,'wb') as f:
-                shutil.copyfileobj(res.raw, f)
-            self.logger.info('Image sucessfully Downloaded: snaphot.jpeg')
-        else:
-            self.logger.info('Image Couldn\'t be retrieved')
-        return self.snap_file
-
-    async def get_snapchot_url(self) -> str:
-        self.manual_entry = {
-                    "method": "server.webcams.list",
-                    "params": {}
-                }
-        self.logger.debug(f"Sending : {self.manual_entry}")
-        ret = await self._send_manual_request()
-        self.logger.debug(f"Response: {ret}")
-        snapchot_url = ret['result']['webcams'][0]['snapshot_url']
-        self.manual_entry = {}
-        return snapchot_url
-
     async def _process_stream(
         self, reader: asyncio.StreamReader
     ) -> None:
+        '''
+        Process request and notifications from Moonraker
+        @param reader: Asyncio stream reader
+
+        When status changes, Moonraker sends a notification to the Unix Socket.
+        '''
         errors_remaining: int = 10
         while not reader.at_eof():
             try:
@@ -343,6 +246,7 @@ class KeybaseBot:
         await self.close()
 
     def _make_rpc_msg(self, method: str, **kwargs) -> Dict[str, Any]:
+
         msg = {"jsonrpc": "2.0", "method": method}
         uid = id(msg)
         msg["id"] = uid
@@ -352,6 +256,12 @@ class KeybaseBot:
         return msg
 
     async def _send_manual_request(self) -> Dict[str, Any]:
+        '''
+        Send a manual request to Moonraker.
+        @return: Response from Moonraker
+
+        Send the content of self.manual_entry to Moonraker.
+        '''
         if not self.manual_entry:
             return
         params = self.manual_entry.get("params")
@@ -362,25 +272,11 @@ class KeybaseBot:
         await self._write_message(message)
         return await fut
 
-    async def _send_preset(self, index: int) -> Dict[str, Any]:
-        if index < 0 or index >= len(self.api_presets):
-            self.logger.info(f"Error: Preset index {index} out of range.")
-            return {}
-        preset = self.api_presets[index]
-        if "method" not in self.api_presets[index]:
-            self.logger.info(f"Error: Invalid Preset {preset}")
-            return
-        params: Dict[str, Any] = preset.get("params", {})
-        if not isinstance(params, dict):
-            params = {}
-        message = self._make_rpc_msg(preset["method"], **params)
-        fut = self._loop.create_future()
-        self.pending_reqs[message["id"]] = fut
-        self.logger.info(f"Sending: {message}")
-        await self._write_message(message)
-        return await fut
-
     async def _write_message(self, message: Dict[str, Any]) -> None:
+        '''
+        Write a message to the Unix Socket
+        @param message: Message to send
+        '''
         data = json.dumps(message).encode() + b"\x03"
         try:
             self.writer.write(data)
@@ -390,9 +286,157 @@ class KeybaseBot:
         except Exception:
             await self.close()
 
+    async def pending_status_message(self, message):
+        '''
+        Send a status message to the keybase channel with an attached snapshot
+        @param message: Message to send
+        '''
+        self.logger.info(f"Sending message: {message}")
+        await self.get_snapshot()
+        await self.bot.chat.attach(self.channel, self.snap_file, self.header_message+message)
+
+    async def kb_status_msg(self):
+        '''
+        Send a status message to the keybase channel with an attached snapshot
+        @param message: Message to send
+        '''
+        status = await self.get_printer_status()
+        # Status: {'jsonrpc': '2.0', 'result': {'eventtime': 267760.750332633, 'status': {'print_stats': {'filename': 'cable_tie_PLA_7m50s.gcode', 'total_duration': 281.22244369098917, 'print_duration': 0.0, 'filament_used': 0.0, 'state': 'paused', 'message': '', 'info': {'total_layer': 9, 'current_layer': 0}}}}, 'id': 140316437579168}
+        # convert duration in seconds to HH:MM:SS
+        def convert(seconds):
+            seconds = seconds % (24 * 3600)
+            hour = seconds // 3600
+            seconds %= 3600
+            minutes = seconds // 60
+            seconds %= 60
+            return "%d:%02d:%02d" % (hour, minutes, seconds)
+
+        msg = textwrap.dedent(f"""
+            >`State          :` {status['result']['status']['print_stats']['state']}
+            >`Filename       :` {status['result']['status']['print_stats']['filename']}
+            >`Message        :` {status['result']['status']['print_stats']['message']}
+            >`Total duration :` {convert(status['result']['status']['print_stats']['total_duration'])}
+            >`Print duration :` {convert(status['result']['status']['print_stats']['print_duration'])}
+            >`Filament used  :` {status['result']['status']['print_stats']['filament_used']}
+            >`Total layer    :` {status['result']['status']['print_stats']['info']['total_layer']}
+            >`Current layer  :` {status['result']['status']['print_stats']['info']['current_layer']}
+        """)
+        await self.get_snapshot()
+        return msg
+
+    async def run_bot(self):
+        '''
+        Start the keybase bot
+        '''
+        asyncio.run(await self.bot.start(listen_options=LISTEN_OPTIONS))
+
+    async def run_moonraker(self) -> None:
+        '''
+        Start the connection to Moonraker
+        '''
+        await self._connect()
+
+    async def _connect(self) -> None:
+        '''
+        Connect to Moonraker
+        '''
+        print(f"Connecting to Moonraker at {self.sockpath}")
+        while True:
+            try:
+                reader, writer = await asyncio.open_unix_connection(
+                    self.sockpath, limit=SOCKET_LIMIT
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                await asyncio.sleep(1.)
+                continue
+            break
+        self.writer = writer
+        self._loop.create_task(self._process_stream(reader))
+        self.connected = True
+        self.logger.info("Connected to Moonraker")
+        self.manual_entry = {
+            "method": "server.connection.identify",
+            "params": {
+                "client_name": "Unix Socket Test",
+                "version": "0.0.1",
+                "type": "other",
+                "url": "https://github.com/Arksine/moontest"
+            }
+        }
+        ret = await self._send_manual_request()
+        self.manual_entry = {}
+        self.logger.info(f"Client Identified With Moonraker: {ret}")
+
+    async def get_printer_status(self) -> Dict[str, Any]:
+        '''
+        Get the status of the printer
+        @return: Response from Moonraker
+        '''
+        # Sending: {'jsonrpc': '2.0', 'method': 'printer.objects.list', 'id': 139689691991728}
+        # Response: {'jsonrpc': '2.0', 'result': {'objects': ['webhooks', 'configfile', 'mcu', 'gcode_move', 'print_stats', 'virtual_sdcard', 'pause_resume', 'display_status', 'gcode_macro CANCEL_PRINT', ..., 'motion_report', 'query_endstops', 'system_stats', 'manual_probe', 'toolhead', 'extruder']}, 'id': 139689691991728}
+        self.manual_entry = {
+                    "method": "printer.objects.query",
+                    "params": {'objects' : {'print_stats' : None}}
+                }
+        self.logger.debug(f"Sending : {self.manual_entry}")
+        ret = await self._send_manual_request()
+        self.logger.debug(f"Response: {ret}")
+        self.manual_entry = {}
+        return ret
+
+    async def get_snapshot(self) -> None:
+        '''
+        Get the snapshot from the printer
+        '''
+        self.logger.info(f"Fetching url for snapshot")
+        url = await self.get_snapchot_url()
+        snapchot_url = f'http://{self.hostname}'+url
+        # download image file from snaphot_url and embed into message
+        self.logger.info(f"Downloading snapshot from {snapchot_url}")
+        res = requests.get(snapchot_url, stream = True)
+        self.logger.debug(f"Response: {res}")
+        if res.status_code == 200:
+            if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
+                os.makedirs(os.path.join(this_dir, '..', 'tmp'))
+            with open(self.snap_file,'wb') as f:
+                shutil.copyfileobj(res.raw, f)
+            self.logger.info('Image sucessfully Downloaded: snaphot.jpeg')
+        else:
+            self.logger.info('Image Couldn\'t be retrieved')
+
+    async def get_snapchot_url(self) -> str:
+        '''
+        Get the snapshot url from Moonraker
+        @return: Response from Moonraker
+        '''
+        self.manual_entry = {
+                    "method": "server.webcams.list",
+                    "params": {}
+                }
+        self.logger.debug(f"Sending : {self.manual_entry}")
+        ret = await self._send_manual_request()
+        self.logger.debug(f"Response: {ret}")
+        snapchot_url = ret['result']['webcams'][0]['snapshot_url']
+        self.manual_entry = {}
+        return snapchot_url
+
     async def close(self):
+        '''
+        Close the connection to Moonraker
+        '''
         if not self.connected:
             return
         self.connected = False
         self.writer.close()
         await self.writer.wait_closed()
+
+    def run(self):
+        '''
+        Main loop of the bot. It starts the keybase bot and the moonraker connection.
+        '''
+        self._loop = asyncio.get_event_loop()
+        self._loop.create_task(self.run_bot())
+        self._loop.create_task(self.run_moonraker())
+        self._loop.run_forever()
