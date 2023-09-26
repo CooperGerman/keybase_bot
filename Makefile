@@ -21,17 +21,25 @@ default: all
 
 all : install
 
-install : check_bins env setup install_python_deps service
+install : check_bins env setup service
 
-setup: venv
+setup: venv paperkey
+
+paperkey: /home/$(USER)/.keybase_bot/paper_key
+/home/$(USER)/.keybase_bot/paper_key:
+	mkdir -p /home/$(USER)/.keybase_bot
+	$(info Generating paperkey)
+	keybase login uboe_bot
+	keybase paperkey  > /home/$(USER)/.keybase_bot/paper_key
+	$(info Done)
 
 service:
 	$(info Setting up service)
-	systemctl --user enable /home/$(USER)/scripts/keybase_bot.service
-	systemctl --user start keybase_bot.service
+	systemctl --user enable /home/$(USER)/keybase_bot/scripts/uboe_keybase_bot.service
+	systemctl --user start uboe_keybase_bot.service
 	$(info Done)
 
-venv:
+venv: get_requirements
 	echo "Setting up environment" ; \
 	mkdir -p .venv ; \
 	python3.7 -m venv .venv ; \
@@ -41,7 +49,10 @@ venv:
 	pip install --upgrade pip ; \
 	echo "Done initializing virtual environment"
 
-REQUIRED_BINS := pip python3.7
+get_requirements:
+	pipreqs --force --savepath tools/requirements.txt ./tools
+
+REQUIRED_BINS := pip python3.7 pipreqs
 check_bins:
 	$(info Looking for binaries: `$(REQUIRED_BINS)` in PATH)
 	$(foreach bin,$(REQUIRED_BINS),\
@@ -61,26 +72,18 @@ clean:
 super_clean: clean
 	rm -rf ./env
 
-install_python_deps:
-	pip install -r tools/requirements.txt
-
-freeze:
-	cd tools &&	pip freeze > requirements.txt
-
 # ./pip.sh check requirements.txt
 help :
 	@echo "make help                : prints this help"
-	@echo "make install_python_deps : install python dependencies"
-	@echo "make freeze              : freeze python dependencies"
-	@echo "make clean               : clean build files"
-	@echo "make super_clean         : clean build files and virtual environment"
-	@echo "make check_bins          : check if required binaries are installed"
-	@echo "make env                 : create work, result, logs and tmp directories"
-	@echo "make setup               : setup service"
-	@echo "make service             : start service"
-	@echo "make venv                : setup virtual environment"
-	@echo "make install             : install dependencies"
-	@echo "make all                 : install dependencies"
+	@echo "make install             : installs the bot"
+	@echo "make setup               : sets up the bot"
+	@echo "make service             : sets up the service"
+	@echo "make venv                : sets up the virtual environment"
+	@echo "make get_requirements    : gets the requirements"
+	@echo "make check_bins          : checks the binaries"
+	@echo "make env                 : sets up the environment"
+	@echo "make clean               : cleans the environment"
+	@echo "make super_clean         : cleans the environment and the virtual environment"
 
 
 
