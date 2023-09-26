@@ -21,7 +21,7 @@ default: all
 
 all : install
 
-install : check_bins install_python_deps
+install : check_bins env setup install_python_deps service
 
 setup: venv
 
@@ -52,6 +52,7 @@ env:
 	mkdir -p ./work
 	mkdir -p ./result
 	mkdir -p ./logs
+	mkdir -p ./tmp
 
 clean:
 	rm -rf ./work
@@ -66,12 +67,20 @@ install_python_deps:
 freeze:
 	cd tools &&	pip freeze > requirements.txt
 
-run: env
-	@echo "Pulling mirrors"
-	@python tools/repo_mirrorer.py
-
 # ./pip.sh check requirements.txt
 help :
 	@echo "make help                : prints this help"
 	@echo "make install_python_deps : install python dependencies"
+	@echo "make freeze              : freeze python dependencies"
+	@echo "make clean               : clean build files"
+	@echo "make super_clean         : clean build files and virtual environment"
+	@echo "make check_bins          : check if required binaries are installed"
+	@echo "make env                 : create work, result, logs and tmp directories"
+	@echo "make setup               : setup service"
+	@echo "make service             : start service"
+	@echo "make venv                : setup virtual environment"
+	@echo "make install             : install dependencies"
+	@echo "make all                 : install dependencies"
+
+
 
