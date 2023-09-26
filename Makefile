@@ -27,8 +27,8 @@ setup: venv
 
 service:
 	$(info Setting up service)
-	systemctl enable /home/$(USER)/scripts/keybase_bot.service
-	systemctl start keybase_bot.service
+	systemctl --user enable /home/$(USER)/scripts/keybase_bot.service
+	systemctl --user start keybase_bot.service
 	$(info Done)
 
 venv:
@@ -62,6 +62,9 @@ super_clean: clean
 
 install_python_deps:
 	pip install -r tools/requirements.txt
+
+freeze:
+	cd tools &&	pip freeze > requirements.txt
 
 run: env
 	@echo "Pulling mirrors"
