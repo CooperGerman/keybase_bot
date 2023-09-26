@@ -1,6 +1,7 @@
 [Unit]
 Description=Runs the uboe keybase bot
-After=moonraker.target
+Requires=moonraker.target
+Requires=keybase.target
 
 [Service]
 Type=simple
