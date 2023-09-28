@@ -182,7 +182,10 @@ class KeybaseBot:
             if not file:
                 await bot.chat.send(channel, self.header_message + msg)
             else :
-                await bot.chat.attach(channel, file, self.header_message+msg)
+                if not os.path.exists(file):
+                    await bot.chat.send(channel, self.header_message + msg)
+                else :
+                    await bot.chat.attach(channel, file, self.header_message+msg)
 
     async def _process_stream(
         self, reader: asyncio.StreamReader
@@ -312,14 +315,14 @@ class KeybaseBot:
             return "%d:%02d:%02d" % (hour, minutes, seconds)
 
         msg = textwrap.dedent(f"""
-            >`State          :` {status['result']['status']['print_stats']['state']}
-            >`Filename       :` {status['result']['status']['print_stats']['filename']}
-            >`Message        :` {status['result']['status']['print_stats']['message']}
-            >`Total duration :` {convert(status['result']['status']['print_stats']['total_duration'])}
-            >`Print duration :` {convert(status['result']['status']['print_stats']['print_duration'])}
-            >`Filament used  :` {status['result']['status']['print_stats']['filament_used']}
-            >`Total layer    :` {status['result']['status']['print_stats']['info']['total_layer']}
-            >`Current layer  :` {status['result']['status']['print_stats']['info']['current_layer']}
+            >`State          :` ({status['result']['status']['print_stats']['state'] if 'state' in status['result']['status']['print_stats'] else 'unknown' })
+            >`Filename       :` ({status['result']['status']['print_stats']['filename'] if 'filename' in status['result']['status']['print_stats'] else 'unknown' })
+            >`Message        :` ({status['result']['status']['print_stats']['message'] if 'message' in status['result']['status']['print_stats'] else 'unknown' })
+            >`Total duration :` ({convert(status['result']['status']['print_stats']['total_duration']) if 'total_duration' in status['result']['status']['print_stats'] else 'unknown' })
+            >`Print duration :` ({convert(status['result']['status']['print_stats']['print_duration']) if 'print_duration' in status['result']['status']['print_stats'] else 'unknown' })
+            >`Filament used  :` ({status['result']['status']['print_stats']['filament_used'] if 'filament_used' in status['result']['status']['print_stats'] else 'unknown' })
+            >`Total layer    :` ({status['result']['status']['print_stats']['info']['total_layer'] if 'info' in status['result']['status']['print_stats'] and 'total_layer' in status['result']['status']['print_stats']['info'] else 'unknown' })
+            >`Current layer  :` ({status['result']['status']['print_stats']['info']['current_layer'] if 'info' in status['result']['status']['print_stats'] and 'current_layer' in status['result']['status']['print_stats']['info'] else 'unknown' })
         """)
         await self.get_snapshot()
         return msg
@@ -392,6 +395,9 @@ class KeybaseBot:
         '''
         self.logger.info(f"Fetching url for snapshot")
         url = await self.get_snapchot_url()
+        if not url :
+            self.logger.info(f"Snapshot url not found")
+            return
         snapchot_url = f'http://{self.hostname}'+url
         # download image file from snaphot_url and embed into message
         self.logger.info(f"Downloading snapshot from {snapchot_url}")
@@ -418,7 +424,10 @@ class KeybaseBot:
         self.logger.debug(f"Sending : {self.manual_entry}")
         ret = await self._send_manual_request()
         self.logger.debug(f"Response: {ret}")
-        snapchot_url = ret['result']['webcams'][0]['snapshot_url']
+        if ret['result']['webcams'] :
+            snapchot_url = ret['result']['webcams'][0]['snapshot_url']
+        else :
+            snapchot_url = None
         self.manual_entry = {}
         return snapchot_url
 
