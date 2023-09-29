@@ -30,7 +30,8 @@ paperkey: /home/$(USER)/.keybase_bot/paper_key
 	mkdir -p /home/$(USER)/.keybase_bot
 	$(info Generating paperkey)
 	keybase login uboe_bot
-	keybase paperkey  > /home/$(USER)/.keybase_bot/paper_key
+# take only line 3 and remove spaces before first word
+	keybase paperkey | sed -n '3p' | sed 's/^[ \t]*//' > /home/$(USER)/.keybase_bot/paper_key
 	$(info Done)
 
 service:
