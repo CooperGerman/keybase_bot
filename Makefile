@@ -29,9 +29,13 @@ paperkey: /home/$(USER)/.keybase_bot/paper_key
 /home/$(USER)/.keybase_bot/paper_key:
 	mkdir -p /home/$(USER)/.keybase_bot
 	$(info Generating paperkey)
+	keybase config set -b pinentry.disabled true
 	keybase login uboe_bot
-# take only line 3 and remove spaces before first word
-	keybase paperkey | sed -n '3p' | sed 's/^[ \t]*//' > /home/$(USER)/.keybase_bot/paper_key
+# take only line 4 and remove spaces before first word
+	keybase paperkey > /home/$(USER)/.keybase_bot/paper_key
+	sed -n '4p' -i /home/$(USER)/.keybase_bot/paper_key
+	sed 's/^[ \t]*//' -i /home/$(USER)/.keybase_bot/paper_key
+	sed -n '1p' -i /home/$(USER)/.keybase_bot/paper_key
 	$(info Done)
 
 service:
