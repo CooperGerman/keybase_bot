@@ -39,8 +39,8 @@ paperkey: /home/$(USER)/.keybase_bot/paper_key
 
 channel:
 	$(info creating printer dedicated channel)
-	keybase oneshot -u=uboe_bot --paperkey="$(cat ~/.keybase_bot/paper_key)"
-	keybase chat create-channel printhive $(hostname)
+	keybase oneshot -u=uboe_bot --paperkey="$(shell cat ~/.keybase_bot/paper_key)"
+	keybase chat create-channel printhive $(shell hostname)
 
 service:
 	$(info Setting up service)
