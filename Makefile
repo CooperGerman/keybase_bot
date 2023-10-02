@@ -31,7 +31,6 @@ paperkey: /home/$(USER)/.keybase_bot/paper_key
 	$(info Generating paperkey)
 	keybase config set -b pinentry.disabled true
 	keybase login uboe_bot
-# take only line 4 and remove spaces before first word
 	keybase paperkey > /home/$(USER)/.keybase_bot/paper_key
 	sed -n '4p' -i /home/$(USER)/.keybase_bot/paper_key
 	sed 's/^[ \t]*//' -i /home/$(USER)/.keybase_bot/paper_key

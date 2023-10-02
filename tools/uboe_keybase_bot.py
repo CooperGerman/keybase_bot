@@ -115,11 +115,16 @@ def main():
     # what linux user is running this script
     user = subprocess.run(['whoami'], stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
     log.info(f"Running as user: {user}")
+    #if /home/user/keybase_bot does not exist, exit with error
+    if not os.path.exists(f'/home/{user}/keybase_bot'):
+        logger.error(f"Could not find /home/{user}/keybase_bot")
+        logger.error(f"    The bot should be installed on the active user's home directory")
+        sys.exit(1)
     # load api_presets.json from ../common/api_presets.json
-    with open('/home/uboe/keybase_bot/common/api_presets.json', 'r') as file:
+    with open(f'/home/{user}/keybase_bot/common/api_presets.json', 'r') as file:
         api_presets = json.load(file)
     # create a moonraker connection
-    kbBot = KeybaseBot(sockpath='/home/uboe/printer_data/comms/moonraker.sock', presets=api_presets, paperkey=args.paperkey ,logger=logger)
+    kbBot = KeybaseBot(sockpath=f'/home/{user}/printer_data/comms/moonraker.sock', presets=api_presets, paperkey=args.paperkey ,logger=logger)
     # connect to moonraker
     kbBot.run()
 
