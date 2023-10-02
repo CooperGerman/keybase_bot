@@ -37,8 +37,7 @@ paperkey: /home/$(USER)/.keybase_bot/paper_key
 	sed -n '1p' -i /home/$(USER)/.keybase_bot/paper_key
 	$(info Done)
 
-channel: /home/$(USER)/.keybase_bot/printer_channel.json
-/home/$(USER)/.keybase_bot/printer_channel.json:
+channel:
 	$(info creating printer dedicated channel)
 	keybase oneshot -u=uboe_bot --paperkey="$(cat ~/.keybase_bot/paper_key)"
 	keybase chat create-channel printhive $(hostname)
