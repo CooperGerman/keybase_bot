@@ -49,7 +49,8 @@ MENU = [
 ]
 LISTEN_OPTIONS = {
     "filter-channels": [
-        {'name' : 'printhive', 'public' : None, 'members_type' : 'team', 'topic_type' : 'chat', 'topic_name' : "printfarm"}
+        {'name' : 'printhive', 'public' : None, 'members_type' : 'team', 'topic_type' : 'chat', 'topic_name' : "printfarm"},
+        {'name' : 'printhive', 'public' : None, 'members_type' : 'team', 'topic_type' : 'chat', 'topic_name' : os.uname().nodename}
     ]
 }
 
@@ -89,11 +90,11 @@ class KeybaseBot:
             topic_name=LISTEN_OPTIONS['filter-channels'][0]['topic_name']
         )
         self.printerchannel = chat1.ChatChannel(
-            name=LISTEN_OPTIONS['filter-channels'][0]['name'],
-            public=LISTEN_OPTIONS['filter-channels'][0]['public'],
-            members_type=LISTEN_OPTIONS['filter-channels'][0]['members_type'],
-            topic_type=LISTEN_OPTIONS['filter-channels'][0]['topic_type'],
-            topic_name=LISTEN_OPTIONS['filter-channels'][0]['topic_name']
+            name=LISTEN_OPTIONS['filter-channels'][1]['name'],
+            public=LISTEN_OPTIONS['filter-channels'][1]['public'],
+            members_type=LISTEN_OPTIONS['filter-channels'][1]['members_type'],
+            topic_type=LISTEN_OPTIONS['filter-channels'][1]['topic_type'],
+            topic_name=LISTEN_OPTIONS['filter-channels'][1]['topic_name']
         )
         self.hostname = os.uname().nodename
         self.sockpath = sockpath
@@ -303,7 +304,7 @@ class KeybaseBot:
         '''
         self.logger.info(f"Sending message: {message}")
         await self.get_snapshot()
-        await self.bot.chat.attach(self.printfarmchannel, self.snap_file, self.header_message+message)
+        await self.bot.chat.attach(self.printerchannel , self.snap_file, self.header_message+message)
 
     async def kb_status_msg(self):
         '''

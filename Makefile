@@ -23,7 +23,7 @@ all : install
 
 install : check_bins env setup service
 
-setup: venv paperkey
+setup: venv paperkey channel
 
 paperkey: /home/$(USER)/.keybase_bot/paper_key
 /home/$(USER)/.keybase_bot/paper_key:
@@ -36,6 +36,12 @@ paperkey: /home/$(USER)/.keybase_bot/paper_key
 	sed 's/^[ \t]*//' -i /home/$(USER)/.keybase_bot/paper_key
 	sed -n '1p' -i /home/$(USER)/.keybase_bot/paper_key
 	$(info Done)
+
+channel: /home/$(USER)/.keybase_bot/printer_channel.json
+/home/$(USER)/.keybase_bot/printer_channel.json:
+	$(info creating printer dedicated channel)
+	keybase oneshot -u=uboe_bot --paperkey="$(cat ~/.keybase_bot/paper_key)"
+	keybase chat create-channel printhive $(hostname)
 
 service:
 	$(info Setting up service)
