@@ -81,7 +81,14 @@ class KeybaseBot:
             self.bot = Bot(
                 username="uboe_bot", paperkey=self.paperkey, handler=self, loop=self._loop
             )
-        self.channel = chat1.ChatChannel(
+        self.printfarmchannel = chat1.ChatChannel(
+            name=LISTEN_OPTIONS['filter-channels'][0]['name'],
+            public=LISTEN_OPTIONS['filter-channels'][0]['public'],
+            members_type=LISTEN_OPTIONS['filter-channels'][0]['members_type'],
+            topic_type=LISTEN_OPTIONS['filter-channels'][0]['topic_type'],
+            topic_name=LISTEN_OPTIONS['filter-channels'][0]['topic_name']
+        )
+        self.printerchannel = chat1.ChatChannel(
             name=LISTEN_OPTIONS['filter-channels'][0]['name'],
             public=LISTEN_OPTIONS['filter-channels'][0]['public'],
             members_type=LISTEN_OPTIONS['filter-channels'][0]['members_type'],
@@ -296,7 +303,7 @@ class KeybaseBot:
         '''
         self.logger.info(f"Sending message: {message}")
         await self.get_snapshot()
-        await self.bot.chat.attach(self.channel, self.snap_file, self.header_message+message)
+        await self.bot.chat.attach(self.printfarmchannel, self.snap_file, self.header_message+message)
 
     async def kb_status_msg(self):
         '''
