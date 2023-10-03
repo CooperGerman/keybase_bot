@@ -23,7 +23,11 @@ all : install
 
 install : check_bins env setup service
 
-setup: venv paperkey channel
+setup: venv paperkey channel log
+
+log : /home/$(USER)/printer_data/logs/keybase_bot.log
+/home/$(USER)/printer_data/logs/keybase_bot.log :
+	ln -s /home/$(USER)/keybase_bot/logs/keybase_bot.log /home/$(USER)/printer_data/logs/keybase_bot.log
 
 paperkey: /home/$(USER)/.keybase_bot/paper_key
 /home/$(USER)/.keybase_bot/paper_key:
