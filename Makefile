@@ -45,8 +45,8 @@ channel:
 service:
 	$(info Setting up service)
 	systemctl --user daemon-reload
-	systemctl --user enable /home/$(USER)/keybase_bot/scripts/uboe_keybase_bot.service
-	systemctl --user start uboe_keybase_bot.service
+	systemctl --user enable /home/$(USER)/keybase_bot/scripts/keybase_bot.service
+	systemctl --user start keybase_bot.service
 	$(info Done)
 
 venv: get_requirements
