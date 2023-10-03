@@ -34,6 +34,7 @@ paperkey: /home/$(USER)/.keybase_bot/paper_key
 	mkdir -p /home/$(USER)/.keybase_bot
 	$(info Generating paperkey)
 	keybase config set -b pinentry.disabled true
+	keybase logout
 	keybase login uboe_bot
 	keybase paperkey > /home/$(USER)/.keybase_bot/paper_key
 	sed -n '4p' -i /home/$(USER)/.keybase_bot/paper_key
@@ -43,6 +44,7 @@ paperkey: /home/$(USER)/.keybase_bot/paper_key
 
 channel:
 	$(info creating printer dedicated channel)
+	keybase logout
 	keybase oneshot -u=uboe_bot --paperkey="$(shell cat ~/.keybase_bot/paper_key)"
 	keybase chat create-channel printhive $(shell hostname)
 
