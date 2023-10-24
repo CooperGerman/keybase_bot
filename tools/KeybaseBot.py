@@ -32,7 +32,7 @@ import shutil
 import textwrap
 import re
 import requests
-
+import datetime
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
 
@@ -118,10 +118,10 @@ class KeybaseBot:
         )
         self.snap_file = os.path.join(this_dir, '..', 'tmp', 'snaphot.jpeg')
         self.header_message = textwrap.dedent(f"""
-            * ========================= *
-            * Keybase Bot for Moonraker *
-            * ========================= *
             * Hostname: `{self.hostname}` *
+            """)
+        self.footer_message = textwrap.dedent(f"""
+            * ============================================= *
             """)
 
     async def __call__(self, bot, chat_event : chat1.Message ):
@@ -188,12 +188,12 @@ class KeybaseBot:
                 msg = "Not command received. Try `/uboe_bot help`"
 
             if not file:
-                await bot.chat.send(channel, self.header_message + msg)
+                await bot.chat.send(channel, self.header_message + msg + self.footer_message)
             else :
                 if not os.path.exists(file):
-                    await bot.chat.send(channel, self.header_message + msg)
+                    await bot.chat.send(channel, self.header_message + msg + self.footer_message)
                 else :
-                    await bot.chat.attach(channel, file, self.header_message+msg)
+                    await bot.chat.attach(channel, file, self.header_message + msg + self.footer_message)
 
     async def _process_stream(
         self, reader: asyncio.StreamReader
@@ -304,7 +304,7 @@ class KeybaseBot:
         '''
         self.logger.info(f"Sending message: {message}")
         await self.get_snapshot()
-        await self.bot.chat.attach(self.printerchannel , self.snap_file, self.header_message+message)
+        await self.bot.chat.attach(self.printerchannel , self.snap_file, self.header_message + message + self.footer_message)
 
     async def kb_status_msg(self):
         '''
@@ -312,6 +312,7 @@ class KeybaseBot:
         @param message: Message to send
         '''
         status = await self.get_printer_status()
+        filament = await self.get_filament_info()
         # Status: {'jsonrpc': '2.0', 'result': {'eventtime': 267760.750332633, 'status': {'print_stats': {'filename': 'cable_tie_PLA_7m50s.gcode', 'total_duration': 281.22244369098917, 'print_duration': 0.0, 'filament_used': 0.0, 'state': 'paused', 'message': '', 'info': {'total_layer': 9, 'current_layer': 0}}}}, 'id': 140316437579168}
         # convert duration in seconds to HH:MM:SS
         def convert(seconds):
@@ -322,15 +323,41 @@ class KeybaseBot:
             seconds %= 60
             return "%d:%02d:%02d" % (hour, minutes, seconds)
 
+        state = status['result']['status']['print_stats']['state'] if 'state' in status['result']['status']['print_stats'] else 'unknown'
+        progression = int(status['result']['status']['display_status']['progress']*100) if 'progress' in status['result']['status']['display_status'] else 'unknown'
+        total_layers = status['result']['status']['print_stats']['info']['total_layer'] if 'info' in status['result']['status']['print_stats'] and 'total_layer' in status['result']['status']['print_stats']['info'] else 'unknown'
+        current_layer = status['result']['status']['print_stats']['info']['current_layer'] if 'info' in status['result']['status']['print_stats'] and 'current_layer' in status['result']['status']['print_stats']['info'] else 'unknown'
+
+        used_filament_mm = status['result']['status']['print_stats']['filament_used'] if 'filament_used' in status['result']['status']['print_stats'] else 'unknown'
+        density = float(filament['result']['filament']['density']) if 'filament' in filament['result'] and 'density' in filament['result']['filament'] else 'unknown' # in g/cm3
+        diameter = float(filament['result']['filament']['diameter']) if 'filament' in filament['result'] and 'diameter' in filament['result']['filament'] else 'unknown' # in mm
+        if used_filament_mm != 'unknown' and density != 'unknown':
+            used_filament_g = round(used_filament_mm * (diameter/2)**2 * 3.14 * density / 1000, 2)
+        else :
+            used_filament_g = 'unknown'
+
+        total_duration = convert(status['result']['status']['print_stats']['total_duration']) if 'total_duration' in status['result']['status']['print_stats'] else 'unknown'
+        print_duration = convert(status['result']['status']['print_stats']['print_duration']) if 'print_duration' in status['result']['status']['print_stats'] else 'unknown'
+
+        # calculate ETA (datetime at which the print will be finished or finished)
+        if not progression == 'unknown' and progression != 100 :
+            eta = round((100 - progression) * float(status['result']['status']['print_stats']['total_duration']) / progression, 2)
+            eta = convert(eta)
+            # add ETA to current time
+            eta = (datetime.datetime.now() + datetime.timedelta(hours=int(eta.split(':')[0]), minutes=int(eta.split(':')[1]), seconds=int(eta.split(':')[2]))).strftime("%H:%M:%S")
+
+        else :
+            eta = 'unknown'
+
         msg = textwrap.dedent(f"""
-            >`State          :` ({status['result']['status']['print_stats']['state'] if 'state' in status['result']['status']['print_stats'] else 'unknown' })
-            >`Filename       :` ({status['result']['status']['print_stats']['filename'] if 'filename' in status['result']['status']['print_stats'] else 'unknown' })
-            >`Message        :` ({status['result']['status']['print_stats']['message'] if 'message' in status['result']['status']['print_stats'] else 'unknown' })
-            >`Total duration :` ({convert(status['result']['status']['print_stats']['total_duration']) if 'total_duration' in status['result']['status']['print_stats'] else 'unknown' })
-            >`Print duration :` ({convert(status['result']['status']['print_stats']['print_duration']) if 'print_duration' in status['result']['status']['print_stats'] else 'unknown' })
-            >`Filament used  :` ({status['result']['status']['print_stats']['filament_used'] if 'filament_used' in status['result']['status']['print_stats'] else 'unknown' })
-            >`Total layer    :` ({status['result']['status']['print_stats']['info']['total_layer'] if 'info' in status['result']['status']['print_stats'] and 'total_layer' in status['result']['status']['print_stats']['info'] else 'unknown' })
-            >`Current layer  :` ({status['result']['status']['print_stats']['info']['current_layer'] if 'info' in status['result']['status']['print_stats'] and 'current_layer' in status['result']['status']['print_stats']['info'] else 'unknown' })
+            >`Filename       :` {status['result']['status']['print_stats']['filename'] if 'filename' in status['result']['status']['print_stats'] else 'unknown' }
+            >`State          :` {state} ({progression}%)
+            >`ETA            :` {eta}
+            >`Message        :` {status['result']['status']['print_stats']['message'] if 'message' in status['result']['status']['print_stats'] else 'unknown' }
+            >`Total duration :` {total_duration}
+            >`Print duration :` {print_duration}
+            >`Filament used  :` {int(used_filament_mm / 100) } m / {used_filament_g} g
+            >`Current layer  :` {current_layer} / {total_layers}
         """)
         await self.get_snapshot()
         return msg
@@ -380,6 +407,21 @@ class KeybaseBot:
         self.manual_entry = {}
         self.logger.info(f"Client Identified With Moonraker: {ret}")
 
+    async def get_filament_info(self) -> Dict[str, Any]:
+        '''
+        Get the filament info from Moonraker
+        @return: Response from Moonraker
+        '''
+        self.manual_entry = {
+                    "method": "filament.info",
+                    "params": {}
+                }
+        self.logger.debug(f"Sending : {self.manual_entry}")
+        ret = await self._send_manual_request()
+        self.logger.debug(f"Response: {ret}")
+        self.manual_entry = {}
+        return ret
+
     async def get_printer_status(self) -> Dict[str, Any]:
         '''
         Get the status of the printer
@@ -389,7 +431,7 @@ class KeybaseBot:
         # Response: {'jsonrpc': '2.0', 'result': {'objects': ['webhooks', 'configfile', 'mcu', 'gcode_move', 'print_stats', 'virtual_sdcard', 'pause_resume', 'display_status', 'gcode_macro CANCEL_PRINT', ..., 'motion_report', 'query_endstops', 'system_stats', 'manual_probe', 'toolhead', 'extruder']}, 'id': 139689691991728}
         self.manual_entry = {
                     "method": "printer.objects.query",
-                    "params": {'objects' : {'print_stats' : None}}
+                    "params": {'objects' : {'print_stats' : None, 'display_status' : None}}
                 }
         self.logger.debug(f"Sending : {self.manual_entry}")
         ret = await self._send_manual_request()
