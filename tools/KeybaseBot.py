@@ -33,6 +33,7 @@ import textwrap
 import re
 import requests
 import datetime
+from PIL import Image
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
 
@@ -165,6 +166,21 @@ class KeybaseBot:
                         msg = "Requested snaphot:"
                         await self.get_snapshot()
                         file = self.snap_file
+                    # configure camera (/uboe_bot camera id=0 rotate=180)
+                    elif command == "camera" :
+                        msg = "Camera settings updated"
+                        # unpack command arguments without leading /uboe_bot camera
+                        args = re.match(r'(^id=(\d+)\s+rotate=(\d+))', match.group(2))
+                        if args :
+                            if len(args.groups()) == 3 :
+                                id = args.group(2)
+                                rotate = args.group(3)
+                                # save configuration into a json file
+                                with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'w') as file:
+                                    json.dump({'id': id, 'rotate': rotate}, file)
+
+                            else :
+                                msg = "Malformed command received. Try `/uboe_bot help`"
 
                     elif command == "emergency_stop" :
                         msg = "Emergency stop requested"
@@ -196,8 +212,8 @@ class KeybaseBot:
                     await bot.chat.attach(channel, file, self.header_message + msg + self.footer_message)
 
     async def _process_stream(
-        self, reader: asyncio.StreamReader
-    ) -> None:
+            self, reader: asyncio.StreamReader
+        ) -> None:
         '''
         Process request and notifications from Moonraker
         @param reader: Asyncio stream reader
@@ -461,7 +477,18 @@ class KeybaseBot:
             if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
                 os.makedirs(os.path.join(this_dir, '..', 'tmp'))
             with open(self.snap_file,'wb') as f:
-                shutil.copyfileobj(res.raw, f)
+                #if file camera.json apply rotation
+                if os.path.exists(os.path.join(this_dir, '..', 'config', 'camera.json')):
+                    with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
+                        camera = json.load(file)
+                    if 'rotate' in camera :
+                        shutil.copyfileobj(res.raw, f)
+                        img = Image.open(self.snap_file)
+                        img = img.rotate(int(camera['rotate']))
+                        img.save(self.snap_file)
+
+                else :
+                    shutil.copyfileobj(res.raw, f)
             self.logger.info('Image sucessfully Downloaded: snaphot.jpeg')
         else:
             self.logger.info('Image Couldn\'t be retrieved')
@@ -478,8 +505,18 @@ class KeybaseBot:
         self.logger.debug(f"Sending : {self.manual_entry}")
         ret = await self._send_manual_request()
         self.logger.debug(f"Response: {ret}")
+        #if camera.json exists get id
+        if os.path.exists(os.path.join(this_dir, '..', 'config', 'camera.json')):
+            with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
+                camera = json.load(file)
+            if 'id' in camera :
+                id = camera['id']
+            else :
+                id = 0
+        else :
+            id = 0
         if ret['result']['webcams'] :
-            snapchot_url = ret['result']['webcams'][0]['snapshot_url']
+            snapchot_url = ret['result']['webcams'][id]['snapshot_url']
         else :
             snapchot_url = None
         self.manual_entry = {}
