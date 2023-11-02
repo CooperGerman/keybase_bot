@@ -33,11 +33,13 @@ import textwrap
 import re
 import requests
 import datetime
-from PIL import Image
+from PIL import Image, ImageFile
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
 
 from typing import Any, Dict, List, Optional
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -142,7 +144,7 @@ class KeybaseBot:
         bot_command = re.match(r'(^/uboe_bot)', chat_event.msg.content.text.body)
         if bot_command :
             file = None
-            match = re.match(r'(^/uboe_bot)\s+(.*)', chat_event.msg.content.text.body)
+            match = re.match(r'(^/uboe_bot)\s+(.*$)', chat_event.msg.content.text.body)
             if match :
                 if len(match.groups()) == 2 :
                     command = match.group(2)
@@ -167,20 +169,24 @@ class KeybaseBot:
                         await self.get_snapshot()
                         file = self.snap_file
                     # configure camera (/uboe_bot camera id=0 rotate=180)
-                    elif command == "camera" :
-                        msg = "Camera settings updated"
+                    elif re.match(r'(^camera)', command) :
                         # unpack command arguments without leading /uboe_bot camera
-                        args = re.match(r'(^id=(\d+)\s+rotate=(\d+))', match.group(2))
-                        if args :
-                            if len(args.groups()) == 3 :
-                                id = args.group(2)
-                                rotate = args.group(3)
+                        arguments = re.match(r'.*?id=(\d+)\s+rotate=(\d+)', command)
+                        if arguments :
+                            if len(arguments.groups()) == 2 :
+                                id = arguments.group(1)
+                                rotate = arguments.group(2)
                                 # save configuration into a json file
-                                with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'w') as file:
-                                    json.dump({'id': id, 'rotate': rotate}, file)
+                                if not os.path.exists(os.path.join(this_dir, '..', 'config')):
+                                    os.makedirs(os.path.join(this_dir, '..', 'config'))
+                                with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'w') as config_file:
+                                    json.dump({'id': id, 'rotate': rotate}, config_file)
+                                msg = "Camera settings updated"
 
                             else :
                                 msg = "Malformed command received. Try `/uboe_bot help`"
+                        else :
+                            msg = "Malformed command received. Try `/uboe_bot help`"
 
                     elif command == "emergency_stop" :
                         msg = "Emergency stop requested"
@@ -510,7 +516,7 @@ class KeybaseBot:
             with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
                 camera = json.load(file)
             if 'id' in camera :
-                id = camera['id']
+                id = int(camera['id'])
             else :
                 id = 0
         else :

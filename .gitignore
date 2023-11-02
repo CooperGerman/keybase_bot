@@ -3,3 +3,4 @@ logs
 temp
 tmp
 __pycache__
+config/camera.json
