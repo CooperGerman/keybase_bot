@@ -33,13 +33,11 @@ import textwrap
 import re
 import requests
 import datetime
-from PIL import Image, ImageFile
+from PIL import Image
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
 
 from typing import Any, Dict, List, Optional
-
-ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -483,18 +481,16 @@ class KeybaseBot:
             if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
                 os.makedirs(os.path.join(this_dir, '..', 'tmp'))
             with open(self.snap_file,'wb') as f:
-                #if file camera.json apply rotation
-                if os.path.exists(os.path.join(this_dir, '..', 'config', 'camera.json')):
-                    with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
-                        camera = json.load(file)
-                    if 'rotate' in camera :
-                        shutil.copyfileobj(res.raw, f)
-                        img = Image.open(self.snap_file)
-                        img = img.rotate(int(camera['rotate']))
-                        img.save(self.snap_file)
+                shutil.copyfileobj(res.raw, f)
 
-                else :
+            if os.path.exists(os.path.join(this_dir, '..', 'config', 'camera.json')):
+                with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
+                    camera = json.load(file)
+                if 'rotate' in camera :
                     shutil.copyfileobj(res.raw, f)
+                    img = Image.open(self.snap_file)
+                    img = img.rotate(int(camera['rotate']))
+                    img.save(self.snap_file)
             self.logger.info('Image sucessfully Downloaded: snaphot.jpeg')
         else:
             self.logger.info('Image Couldn\'t be retrieved')
