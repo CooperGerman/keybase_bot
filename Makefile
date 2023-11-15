@@ -66,7 +66,9 @@ venv:
 	echo "Done initializing virtual environment"
 
 get_requirements:
+	source .venv/bin/activate
 	pipreqs --force --savepath tools/requirements.txt ./tools
+	deactivate
 
 REQUIRED_BINS := pip python3.7 pipreqs
 check_bins:
