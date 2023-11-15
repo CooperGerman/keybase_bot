@@ -55,7 +55,7 @@ service:
 	systemctl --user start keybase_bot.service
 	$(info Done)
 
-venv:
+venv: get_requirements
 	echo "Setting up environment" ; \
 	mkdir -p .venv ; \
 	python3.7 -m venv .venv ; \
@@ -66,8 +66,8 @@ venv:
 	echo "Done initializing virtual environment"
 
 get_requirements:
-	source .venv/bin/activate
-	pipreqs --force --savepath tools/requirements.txt ./tools
+	source .venv/bin/activate ; \
+	pipreqs --force --savepath tools/requirements.txt ./tools ; \
 	deactivate
 
 REQUIRED_BINS := pip python3.7 pipreqs
