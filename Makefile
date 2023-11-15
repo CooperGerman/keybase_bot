@@ -55,7 +55,7 @@ service:
 	systemctl --user start keybase_bot.service
 	$(info Done)
 
-venv: get_requirements
+venv:
 	echo "Setting up environment" ; \
 	mkdir -p .venv ; \
 	python3.7 -m venv .venv ; \
