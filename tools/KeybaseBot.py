@@ -54,6 +54,7 @@ LISTEN_OPTIONS = {
         {'name' : 'printhive', 'public' : None, 'members_type' : 'team', 'topic_type' : 'chat', 'topic_name' : os.uname().nodename}
     ]
 }
+ALLOWED_USERS = json.load(open(os.path.join(this_dir, '..', 'common', 'allowed_users.json'), 'r'))
 
 class KeybaseBot:
     def __init__(
@@ -142,7 +143,14 @@ class KeybaseBot:
         bot_command = re.match(r'(^/uboe_bot)', chat_event.msg.content.text.body)
         if bot_command :
             file = None
-            match = re.match(r'(^/uboe_bot)\s+(.*$)', chat_event.msg.content.text.body)
+            if re.match(r'(^/uboe_bot)\s+(debug)\s+(.*$)', chat_event.msg.content.text.body) :
+                if chat_event.msg.sender.username in ALLOWED_USERS:
+                    match = re.match(r'(^/uboe_bot)\s+debug\s+(.*$)', chat_event.msg.content.text.body)
+                else :
+                    msg = "You are not allowed to enable debug mode"
+            else :
+                match = re.match(r'(^/uboe_bot)\s+(.*$)', chat_event.msg.content.text.body)
+
             if match :
                 if len(match.groups()) == 2 :
                     command = match.group(2)
