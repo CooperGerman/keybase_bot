@@ -141,11 +141,14 @@ class KeybaseBot:
 
         channel = chat_event.msg.channel
         bot_command = re.match(r'(^/uboe_bot)', chat_event.msg.content.text.body)
+        debug = False
+        msg = "Command not recognized. Try `/uboe_bot help`"
         if bot_command :
             file = None
             if re.match(r'(^/uboe_bot)\s+(debug)\s+(.*$)', chat_event.msg.content.text.body) :
                 if chat_event.msg.sender.username in ALLOWED_USERS:
                     match = re.match(r'(^/uboe_bot)\s+debug\s+(.*$)', chat_event.msg.content.text.body)
+                    debug = True
                 else :
                     msg = "You are not allowed to enable debug mode"
             else :
@@ -209,7 +212,24 @@ class KeybaseBot:
                     elif "🌴ping🌴" == command :
                         msg = "🍹PONG!🍹"
                     else :
-                        msg = "Command not recognized. Try `/uboe_bot help`"
+                        if debug :
+                            if command == "moonraker" :
+                                # check if socket is connected
+                                if self.connected :
+                                    msg = "Moonraker is connected"
+                                else :
+                                    msg = "Moonraker is not connected"
+                            elif command == "reconnect_moonraker" :
+                                # check if socket is connected
+                                if self.connected :
+                                    msg = "Moonraker is already connected"
+                                else :
+                                    await self._connect()
+                                    msg = "Moonraker reconnected"
+                            elif command == "emulate_job" :
+                                message = f"Emulated job started"
+                                self._loop.create_task(self.pending_status_message(message))
+
                 else :
                     msg = "Malformed command received. Try `/uboe_bot help`"
             else :
@@ -268,15 +288,37 @@ class KeybaseBot:
 
                 if item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
                     message = f"Job {item['params'][0]['job']['filename']} completed"
+                    # remove thumbnail files
+                    if os.path.exists(os.path.join(this_dir, '..', 'tmp', '.thumbs')):
+                        shutil.rmtree(os.path.join(this_dir, '..', 'tmp', '.thumbs'))
+
                 # job cancelled
                 elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
                     message = f"Job {item['params'][0]['job']['filename']} cancelled"
+                    # remove thumbnail files
+                    if os.path.exists(os.path.join(this_dir, '..', 'tmp', '.thumbs')):
+                        shutil.rmtree(os.path.join(this_dir, '..', 'tmp', '.thumbs'))
+
                 # job paused
                 elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'paused':
                     message = f"Job {item['params'][0]['job']['filename']} paused"
                 # job started
                 elif item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
                     message = f"Job {item['params'][0]['job']['filename']} started"
+                    # save the thumbnails
+                    if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
+                        os.makedirs(os.path.join(this_dir, '..', 'tmp'))
+                    for i, thumbnail in enumerate(item['params'][0]['job']['metadata']['thumbnails']) :
+                        url = f'http://{self.hostname}/downloads/{item["params"][0]["job"]["metadata"]["uuid"]}/{thumbnail["relative_path"]}'
+                        self.logger.debug(f"Downloading thumbnail from {url}")
+                        res = requests.get(url, stream = True)
+                        self.logger.debug(f"Response: {res}")
+                        if res.status_code == 200:
+                            with open(os.path.join(this_dir, '..', 'tmp', f'thumbnail_{i}.png','wb')) as f:
+                                shutil.copyfileobj(res.raw, f)
+                        else:
+                            self.logger.info('Thumbnail Couldn\'t be retrieved')
+                            message += f"\nThumbnail Couldn\'t be retrieved"
 
             if 'method' in item and item['method'] == 'notify_check_failure' :
                 message = f"Check filament failure: \n{item['params'][0]['message']}"
@@ -336,6 +378,9 @@ class KeybaseBot:
         '''
         self.logger.info(f"Sending message: {message}")
         await self.get_snapshot()
+        # if there is a thumbnail file attach it to the message
+        if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbnail_0.png')):
+            await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'tmp', 'thumbnail_0.png'), self.header_message + message + self.footer_message)
         await self.bot.chat.attach(self.printerchannel , self.snap_file, self.header_message + message + self.footer_message)
 
     async def kb_status_msg(self):
@@ -361,8 +406,9 @@ class KeybaseBot:
         current_layer = status['result']['status']['print_stats']['info']['current_layer'] if 'info' in status['result']['status']['print_stats'] and 'current_layer' in status['result']['status']['print_stats']['info'] else 'unknown'
 
         used_filament_mm = status['result']['status']['print_stats']['filament_used'] if 'filament_used' in status['result']['status']['print_stats'] else 'unknown'
-        density = float(filament['result']['filament']['density']) if 'filament' in filament['result'] and 'density' in filament['result']['filament'] else 'unknown' # in g/cm3
-        diameter = float(filament['result']['filament']['diameter']) if 'filament' in filament['result'] and 'diameter' in filament['result']['filament'] else 'unknown' # in mm
+        if 'result' in filament :
+            density = float(filament['result']['filament']['density']) if 'filament' in filament['result'] and 'density' in filament['result']['filament'] else 'unknown' # in g/cm3
+            diameter = float(filament['result']['filament']['diameter']) if 'filament' in filament['result'] and 'diameter' in filament['result']['filament'] else 'unknown' # in mm
         if used_filament_mm != 'unknown' and density != 'unknown':
             used_filament_g = round(used_filament_mm * (diameter/2)**2 * 3.14 * density / 1000, 2)
         else :
@@ -388,7 +434,7 @@ class KeybaseBot:
             >`Message        :` {status['result']['status']['print_stats']['message'] if 'message' in status['result']['status']['print_stats'] else 'unknown' }
             >`Total duration :` {total_duration}
             >`Print duration :` {print_duration}
-            >`Filament used  :` {int(used_filament_mm / 100) } m / {used_filament_g} g
+            >`Filament used  :` {int(used_filament_mm / 100) if used_filament_mm != "unknown" else "unknown"} m / {used_filament_g} g
             >`Current layer  :` {current_layer} / {total_layers}
         """)
         await self.get_snapshot()
