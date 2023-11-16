@@ -90,6 +90,11 @@ clean:
 super_clean: clean
 	rm -rf ./env
 
+debug:
+	systemctl --user stop keybase_bot.service
+	source .venv/bin/activate ; \
+	python3.7 tools/uboe_keybase_bot.py ~/.keybase_bot/paper_key
+
 # ./pip.sh check requirements.txt
 help :
 	@echo "make help                : prints this help"
