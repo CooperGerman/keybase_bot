@@ -140,19 +140,19 @@ class KeybaseBot:
             return
 
         channel = chat_event.msg.channel
-        bot_command = re.match(r'(^/uboe_bot)', chat_event.msg.content.text.body)
+        chat_msg = chat_event.msg.content.text.body
+        bot_command = re.match(r'(^/uboe_bot)', chat_msg)
         debug = False
         msg = "Command not recognized. Try `/uboe_bot help`"
+        match = re.match(r'(^/uboe_bot)\s+(.*$)', chat_msg)
         if bot_command :
             file = None
-            if re.match(r'(^/uboe_bot)\s+(debug)\s+(.*$)', chat_event.msg.content.text.body) :
+            if re.match(r'(^/uboe_bot)\s+(debug)\s+(.*$)', chat_msg) :
                 if chat_event.msg.sender.username in ALLOWED_USERS:
-                    match = re.match(r'(^/uboe_bot)\s+debug\s+(.*$)', chat_event.msg.content.text.body)
+                    match = re.match(r'(^/uboe_bot)\s+debug\s+(.*$)', chat_msg)
                     debug = True
                 else :
                     msg = "You are not allowed to enable debug mode"
-            else :
-                match = re.match(r'(^/uboe_bot)\s+(.*$)', chat_event.msg.content.text.body)
 
             if match :
                 if len(match.groups()) == 2 :
@@ -166,6 +166,9 @@ class KeybaseBot:
                                 `status` - display the printer's status
                                 `snapshot` - display the printer's snapshot
                                 `emergency_stop` - emergency stop
+                                `camera id=<int> rotate=<int>` - configure camera
+                                `debug` - enable debug mode (followed by the command you want to debug)
+                                          Please run `/uboe_bot debug commands` for more info and available commands
                             More commands coming soon!
                         """)
                     #if command == "status" :
@@ -229,6 +232,14 @@ class KeybaseBot:
                             elif command == "emulate_job" :
                                 message = f"Emulated job started"
                                 self._loop.create_task(self.pending_status_message(message))
+                            elif command == "commands" : # list all commands
+                                msg = textwrap.dedent("""
+                                    Available commands:
+                                        `moonraker` - check if moonraker is connected
+                                        `reconnect_moonraker` - reconnect to moonraker
+                                        `emulate_job` - emulate a job
+                                        `commands` - list all debug commands
+                                """)
 
                 else :
                     msg = "Malformed command received. Try `/uboe_bot help`"
@@ -381,6 +392,8 @@ class KeybaseBot:
         # if there is a thumbnail file attach it to the message
         if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbnail_0.png')):
             await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'tmp', 'thumbnail_0.png'), self.header_message + message + self.footer_message)
+        else :
+            await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'common', 'no_image.png'), self.header_message + message + '\n(no thumbnail found)' + self.footer_message)
         await self.bot.chat.attach(self.printerchannel , self.snap_file, self.header_message + message + self.footer_message)
 
     async def kb_status_msg(self):
