@@ -2,12 +2,11 @@
 Description=Runs the uboe keybase bot
 Requires=/etc/systemd/system/moonraker.service
 After=/etc/systemd/system/moonraker.service
-Requires=keybase.service
-After=keybase.service
+Requires=/usr/lib/systemd/user/keybase.service
+After=/usr/lib/systemd/user/keybase.service
 
 [Service]
 Type=simple
-Environment="FROM=SYSTEMD"
 WorkingDirectory=/home/uboe/keybase_bot/
 ExecStart=/home/uboe/keybase_bot/scripts/run_keybase_bot.sh
 RestartSec=10
