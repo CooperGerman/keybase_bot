@@ -325,7 +325,7 @@ class KeybaseBot:
                         res = requests.get(url, stream = True)
                         self.logger.debug(f"Response: {res}")
                         if res.status_code == 200:
-                            with open(os.path.join(this_dir, '..', 'tmp', f'thumbnail_{i}.png','wb')) as f:
+                            with open(os.path.join(this_dir, '..', 'tmp', f'thumbnail_{i}.png'),'wb') as f:
                                 shutil.copyfileobj(res.raw, f)
                         else:
                             self.logger.info('Thumbnail Couldn\'t be retrieved')
