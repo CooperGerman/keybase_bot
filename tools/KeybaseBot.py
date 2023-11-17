@@ -587,6 +587,8 @@ class KeybaseBot:
         self.connected = False
         self.writer.close()
         await self.writer.wait_closed()
+        # exit script as the service will be relaunched automatically
+        sys.exit(0)
 
     def run(self):
         '''
