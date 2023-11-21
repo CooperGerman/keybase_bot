@@ -118,7 +118,7 @@ class KeybaseBot:
         self.max_method_len: int = max(
             [len(p.get("method", "")) for p in self.api_presets]
         )
-        self.snap_file = os.path.join(this_dir, '..', 'tmp', 'snaphot.jpeg')
+        self.snap_file = os.path.join(this_dir, '..', 'tmp', 'snapshot.jpeg')
         self.header_message = textwrap.dedent(f"""
             * Hostname: `{self.hostname}` *
             """)
@@ -177,7 +177,7 @@ class KeybaseBot:
                         file = self.snap_file
                     #if command == "snapshot" :
                     elif command == "snapshot" :
-                        msg = "Requested snaphot:"
+                        msg = "Requested snapshot:"
                         await self.get_snapshot()
                         file = self.snap_file
                     # configure camera (/uboe_bot camera id=0 rotate=180)
@@ -294,21 +294,19 @@ class KeybaseBot:
                 self.logger.debug(f"Notification: {item}\n")
 
             if 'method' in item and item['method'] == 'notify_history_changed' :
-                # get webcam info (Sending: {'jsonrpc': '2.0', 'method': 'server.webcams.list', 'id': 140676070477984}
-                    # Response: {'jsonrpc': '2.0', 'result': {'webcams': [{'enabled': True, 'icon': 'mdiPrinter3d', 'aspect_ratio': '4:3', 'target_fps_idle': 15, 'name': 'bed', 'location': 'printer', 'service': 'mjpegstreamer-adaptive', 'target_fps': 15, 'stream_url': '/webcam/?action=stream', 'snapshot_url': '/webcam/?action=snapshot', 'flip_horizontal': False, 'flip_vertical': False, 'rotation': 0, 'source': 'database', 'extra_data': {}}]}, 'id': 140676070477984})
 
                 if item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
                     message = f"Job {item['params'][0]['job']['filename']} completed"
                     # remove thumbnail files
-                    if os.path.exists(os.path.join(this_dir, '..', 'tmp', '.thumbs')):
-                        shutil.rmtree(os.path.join(this_dir, '..', 'tmp', '.thumbs'))
+                    if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png')):
+                        shutil.rmtree(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png'))
 
                 # job cancelled
                 elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
                     message = f"Job {item['params'][0]['job']['filename']} cancelled"
                     # remove thumbnail files
-                    if os.path.exists(os.path.join(this_dir, '..', 'tmp', '.thumbs')):
-                        shutil.rmtree(os.path.join(this_dir, '..', 'tmp', '.thumbs'))
+                    if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png')):
+                        shutil.rmtree(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png'))
 
                 # job paused
                 elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'paused':
@@ -320,7 +318,7 @@ class KeybaseBot:
                     if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
                         os.makedirs(os.path.join(this_dir, '..', 'tmp'))
                     for i, thumbnail in enumerate(item['params'][0]['job']['metadata']['thumbnails']) :
-                        url = f'http://{self.hostname}/downloads/{item["params"][0]["job"]["metadata"]["uuid"]}/{thumbnail["relative_path"]}'
+                        url = f'http://{self.hostname}/server/files/gcodes/{thumbnail["relative_path"]}'
                         self.logger.debug(f"Downloading thumbnail from {url}")
                         res = requests.get(url, stream = True)
                         self.logger.debug(f"Response: {res}")
@@ -558,7 +556,7 @@ class KeybaseBot:
                     img = Image.open(self.snap_file)
                     img = img.rotate(int(camera['rotate']))
                     img.save(self.snap_file)
-            self.logger.info('Image sucessfully Downloaded: snaphot.jpeg')
+            self.logger.info('Image sucessfully Downloaded: snapshot.jpeg')
         else:
             self.logger.info('Image Couldn\'t be retrieved')
 
