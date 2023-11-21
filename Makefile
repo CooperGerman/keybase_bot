@@ -93,7 +93,7 @@ super_clean: clean
 debug:
 	systemctl --user stop keybase_bot.service
 	source .venv/bin/activate ; \
-	python3.7 tools/uboe_keybase_bot.py ~/.keybase_bot/paper_key
+	python3.7 tools/uboe_keybase_bot.py ~/.keybase_bot/paper_key --loglvl=debug
 
 # ./pip.sh check requirements.txt
 help :
