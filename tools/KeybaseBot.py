@@ -289,6 +289,7 @@ class KeybaseBot:
             # COMPLETED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695312127.3214107, 'filament_used': 8545.623679997632, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 6051.890782442992, 'status': 'completed', 'start_time': 1695305884.7087114, 'total_duration': 6242.467836786003, 'job_id': '00000E', 'exists': True}}]}
             # START: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'added', 'job': {'end_time': None, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'in_progress', 'start_time': 1695313479.608397, 'total_duration': 0.049926147010410205, 'job_id': '000010', 'exists': True}}]}
             message = None
+            to_printfarm = False
             # check the status of the job
             if 'method' in item and item['method'] in  ['notify_history_changed', 'notify_check_failure'] :
                 self.logger.debug(f"Notification: {item}\n")
@@ -313,6 +314,7 @@ class KeybaseBot:
                     message = f"Job {item['params'][0]['job']['filename']} paused"
                 # job started
                 elif item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
+                    to_printfarm = True
                     message = f"Job {item['params'][0]['job']['filename']} started"
                     # save the thumbnails
                     if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
@@ -334,7 +336,7 @@ class KeybaseBot:
 
             # if message is not None send it to the keybase channel
             if message :
-                self._loop.create_task(self.pending_status_message(message))
+                self._loop.create_task(self.pending_status_message(message), to_printfarm)
 
         self.logger.info("Unix Socket Disconnection from _process_stream()")
         await self.close()
@@ -380,7 +382,7 @@ class KeybaseBot:
         except Exception:
             await self.close()
 
-    async def pending_status_message(self, message):
+    async def pending_status_message(self, message, to_printfarm = False):
         '''
         Send a status message to the keybase channel with an attached snapshot
         @param message: Message to send
