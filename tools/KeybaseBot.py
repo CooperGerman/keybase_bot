@@ -336,7 +336,7 @@ class KeybaseBot:
 
             # if message is not None send it to the keybase channel
             if message :
-                self._loop.create_task(self.pending_status_message(message), to_printfarm)
+                self._loop.create_task(self.pending_status_message(message, to_printfarm))
 
         self.logger.info("Unix Socket Disconnection from _process_stream()")
         await self.close()
@@ -365,6 +365,7 @@ class KeybaseBot:
         message = self._make_rpc_msg(method, **params)
         fut = self._loop.create_future()
         self.pending_reqs[message["id"]] = fut
+        self.logger.debug(f"Sending : {message}")
         await self._write_message(message)
         return await fut
 
@@ -390,10 +391,11 @@ class KeybaseBot:
         self.logger.info(f"Sending message: {message}")
         await self.get_snapshot()
         # if there is a thumbnail file attach it to the message
-        if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbnail_0.png')):
-            await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'tmp', 'thumbnail_0.png'), self.header_message + message + self.footer_message)
-        else :
-            await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'common', 'no_image.png'), self.header_message + message + '\n(no thumbnail found)' + self.footer_message)
+        if to_printfarm :
+            if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbnail_1.png')):
+                await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'tmp', 'thumbnail_1.png'), self.header_message + message + self.footer_message)
+            else :
+                await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'common', 'no_image.png'), self.header_message + message + '\n(no thumbnail found)' + self.footer_message)
         await self.bot.chat.attach(self.printerchannel , self.snap_file, self.header_message + message + self.footer_message)
 
     async def kb_status_msg(self):
@@ -431,7 +433,7 @@ class KeybaseBot:
         print_duration = convert(status['result']['status']['print_stats']['print_duration']) if 'print_duration' in status['result']['status']['print_stats'] else 'unknown'
 
         # calculate ETA (datetime at which the print will be finished or finished)
-        if not progression == 'unknown' and progression != 100 :
+        if not progression == 'unknown' and progression != 100 and progression != 0 :
             eta = round((100 - progression) * float(status['result']['status']['print_stats']['total_duration']) / progression, 2)
             eta = convert(eta)
             # add ETA to current time
