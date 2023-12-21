@@ -95,6 +95,9 @@ debug:
 	source .venv/bin/activate ; \
 	python3.7 tools/uboe_keybase_bot.py ~/.keybase_bot/paper_key --loglvl=debug
 
+sock_tester:
+	.venv/bin/python tools/moonraker_sock_tester.py -p common/api_presets.json
+
 # ./pip.sh check requirements.txt
 help :
 	@echo "make help                : prints this help"
