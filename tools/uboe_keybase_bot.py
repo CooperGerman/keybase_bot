@@ -18,11 +18,11 @@
 This is the main program, it fetches all spoolman filaments and generates a user
 profile folder for OrcaSliccer to point to when it starts.
 '''
-import json, asyncio
+import json
 import logging as log
 import os
 import subprocess
-import sys, textwrap, re
+import sys, re
 import coloredlogs
 
 import colored_traceback.auto
