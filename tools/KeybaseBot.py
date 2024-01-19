@@ -504,7 +504,7 @@ class KeybaseBot:
         @return: Response from Moonraker
         '''
         self.manual_entry = {
-                    "method": "filament.info",
+                    "method": "access.spoolman.info",
                     "params": {}
                 }
         self.logger.debug(f"Sending : {self.manual_entry}")
