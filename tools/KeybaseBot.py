@@ -561,6 +561,7 @@ class KeybaseBot:
             self.logger.info('Image sucessfully Downloaded: snapshot.jpeg')
         else:
             self.logger.info('Image Couldn\'t be retrieved')
+            shutil.copyfile(os.path.join(this_dir, '..', 'common', 'no_image.png'), self.snap_file)
 
     async def get_snapchot_url(self) -> str:
         '''
