@@ -13,8 +13,6 @@
 ##  `"Y8888Y"'  `"8Ybbd8"'   `"YbbdP"'   `"Ybbd8"'
 ##
 ###############################################################################
-## © Copyright 2023 Uboe S.A.S
-###############################################################################
 This is the main program, it creates a KeybasBot instance and starts it.
 Heavily inspired by :
     - https://github.com/Arksine/moontest/blob/master/scripts/unix_socket_test.py

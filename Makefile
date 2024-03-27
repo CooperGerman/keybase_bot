@@ -10,7 +10,6 @@
 ##  `"Y8888Y"'  `"8Ybbd8"'   `"YbbdP"'   `"Ybbd8"'
 ##
 ###############################################################################
-## © Copyright 2023 Uboe S.A.S
 ## File:        Makefile
 ## Author(s):   Y.L.P.
 ## Description: Automation

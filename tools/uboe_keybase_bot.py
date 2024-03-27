@@ -13,8 +13,6 @@
 ##  `"Y8888Y"'  `"8Ybbd8"'   `"YbbdP"'   `"Ybbd8"'
 ##
 ###############################################################################
-## © Copyright 2023 Uboe S.A.S
-###############################################################################
 This is the main program, it fetches all spoolman filaments and generates a user
 profile folder for OrcaSliccer to point to when it starts.
 '''
