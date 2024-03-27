@@ -12,9 +12,3 @@ This should `check` the needed binaries, `setup` the `virtualenv` and install th
 
 # Limitations
 	- This bot must be installed in the `/home/$USER/keybase_bot` directory.
-
-# Future works
-	- add snapshot command for bot
-	- add pause / resume command for bot
-	- add moonraker spoolman failure notification
-	- add filament runout notification
