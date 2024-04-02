@@ -114,7 +114,7 @@ class KeybaseBot:
         self.max_method_len: int = max(
             [len(p.get("method", "")) for p in self.api_presets]
         )
-        self.snap_file = os.path.join(this_dir, '..', 'tmp', 'snapshot.jpeg')
+        self._init_camera_settings()
         self.header_message = textwrap.dedent(f"""
             * Hostname: `{self.hostname}` *
             """)
@@ -170,12 +170,12 @@ class KeybaseBot:
                     #if command == "status" :
                     elif command == "status" :
                         msg = await self.kb_status_msg()
-                        file = self.snap_file
+                        file = self._get_snap_file('status')
                     #if command == "snapshot" :
                     elif command == "snapshot" :
                         msg = "Requested snapshot:"
-                        await self.get_snapshot()
-                        file = self.snap_file
+                        await self.get_snapshots()
+                        file = self._get_snap_file('status')
                     # configure camera (/uboe_bot camera id=0 rotate=180)
                     elif re.match(r'(^camera)', command) :
                         # unpack command arguments without leading /uboe_bot camera
@@ -187,8 +187,8 @@ class KeybaseBot:
                                 # save configuration into a json file
                                 if not os.path.exists(os.path.join(this_dir, '..', 'config')):
                                     os.makedirs(os.path.join(this_dir, '..', 'config'))
-                                with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'w') as config_file:
-                                    json.dump({'id': id, 'rotate': rotate}, config_file)
+                                self.camera_settings[id] = {'rotate': rotate}
+                                self._save_camera_settings()
                                 msg = "Camera settings updated"
 
                             else :
@@ -284,6 +284,7 @@ class KeybaseBot:
             # CANCELLED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695313459.7578163, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'cancelled', 'start_time': 1695313285.310055, 'total_duration': 174.37510105301044, 'job_id': '00000F', 'exists': True}}]}
             # COMPLETED: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'finished', 'job': {'end_time': 1695312127.3214107, 'filament_used': 8545.623679997632, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 6051.890782442992, 'status': 'completed', 'start_time': 1695305884.7087114, 'total_duration': 6242.467836786003, 'job_id': '00000E', 'exists': True}}]}
             # START: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'added', 'job': {'end_time': None, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'in_progress', 'start_time': 1695313479.608397, 'total_duration': 0.049926147010410205, 'job_id': '000010', 'exists': True}}]}
+            status = ""
             message = None
             to_printfarm = False
             # check the status of the job
@@ -300,6 +301,7 @@ class KeybaseBot:
 
                 # job cancelled
                 elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
+                    status = 'cancelled'
                     message = f"Job {item['params'][0]['job']['filename']} cancelled"
                     # remove thumbnail files
                     if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png')):
@@ -307,9 +309,11 @@ class KeybaseBot:
 
                 # job paused
                 elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'paused':
+                    status = 'paused'
                     message = f"Job {item['params'][0]['job']['filename']} paused"
                 # job started
                 elif item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
+                    status = 'in_progress'
                     to_printfarm = True
                     message = f"Job {item['params'][0]['job']['filename']} started"
                     # save the thumbnails
@@ -332,7 +336,7 @@ class KeybaseBot:
 
             # if message is not None send it to the keybase channel
             if message :
-                self._loop.create_task(self.pending_status_message(message, to_printfarm))
+                self._loop.create_task(self.pending_status_message(message, status, to_printfarm))
 
         self.logger.info("Unix Socket Disconnection from _process_stream()")
         await self.close()
@@ -365,6 +369,52 @@ class KeybaseBot:
         await self._write_message(message)
         return await fut
 
+    def _init_camera_settings(self) -> None:
+        '''
+        Initialize camera settings
+        '''
+        if not os.path.exists(os.path.join(this_dir, '..', 'config', 'camera.json')):
+            # create an empty camera.json file
+            with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'w') as config_file:
+                json.dump({}, config_file)
+        with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
+            dic = json.load(file)
+        self.camera_settings = dic
+
+    def _save_camera_settings(self) -> None:
+        '''
+        Save camera settings
+        '''
+        with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'w') as config_file:
+            json.dump(self.camera_settings, config_file)
+
+    def _get_snap_file(self, usage : str ="" ) -> str:
+        '''
+        Get the snapshot file path
+        '''
+        for id in self.camera_settings :
+            if not self.camera_settings[id] :
+                self.logger.warning(f"Camera {id} settings not found")
+            else :
+                if not "use" in self.camera_settings[id] :
+                    self.logger.warning(f"Camera {id} setting 'use' not found")
+                else :
+                    for u in self.camera_settings[id]['use'] :
+                        if u == usage :
+                            return os.path.join(this_dir, '..', 'tmp', f'snapshot_{id}.jpeg')
+        # find the first snapshot file that contains the "default" use
+        for id in self.camera_settings :
+            if not self.camera_settings[id] :
+                self.logger.warning(f"Camera {id} settings not found")
+            else :
+                if not "use" in self.camera_settings[id] :
+                    self.logger.warning(f"Camera {id} setting 'use' not found")
+                else :
+                    if "default" in self.camera_settings[id]['use'] :
+                        return os.path.join(this_dir, '..', 'tmp', f'snapshot_{id}.jpeg')
+        # return the "no_image" file
+        return os.path.join(this_dir, '..', 'common', 'no_image.png')
+
     async def _write_message(self, message: Dict[str, Any]) -> None:
         '''
         Write a message to the Unix Socket
@@ -379,20 +429,20 @@ class KeybaseBot:
         except Exception:
             await self.close()
 
-    async def pending_status_message(self, message, to_printfarm = False):
+    async def pending_status_message(self, message, status, to_printfarm = False):
         '''
         Send a status message to the keybase channel with an attached snapshot
         @param message: Message to send
         '''
         self.logger.info(f"Sending message: {message}")
-        await self.get_snapshot()
+        await self.get_snapshots()
         # if there is a thumbnail file attach it to the message
         if to_printfarm :
             if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbnail_1.png')):
                 await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'tmp', 'thumbnail_1.png'), self.header_message + message + self.footer_message)
             else :
                 await self.bot.chat.attach(self.printfarmchannel , os.path.join(this_dir, '..', 'common', 'no_image.png'), self.header_message + message + '\n(no thumbnail found)' + self.footer_message)
-        await self.bot.chat.attach(self.printerchannel , self.snap_file, self.header_message + message + self.footer_message)
+        await self.bot.chat.attach(self.printerchannel , self._get_snap_file(status), self.header_message + message + self.footer_message)
 
     async def kb_status_msg(self):
         '''
@@ -418,8 +468,13 @@ class KeybaseBot:
 
         used_filament_mm = status['result']['status']['print_stats']['filament_used'] if 'filament_used' in status['result']['status']['print_stats'] else 'unknown'
         if 'result' in filament :
-            density = float(filament['result']['filament']['density']) if 'filament' in filament['result'] and 'density' in filament['result']['filament'] else 'unknown' # in g/cm3
-            diameter = float(filament['result']['filament']['diameter']) if 'filament' in filament['result'] and 'diameter' in filament['result']['filament'] else 'unknown' # in mm
+            if isinstance(filament['result'], dict) and 'filament' in filament['result']:
+                density = float(filament['result']['filament']['density']) if 'filament' in filament['result'] and 'density' in filament['result']['filament'] else 'unknown' # in g/cm3
+                diameter = float(filament['result']['filament']['diameter']) if 'filament' in filament['result'] and 'diameter' in filament['result']['filament'] else 'unknown' # in mm
+            else :
+                density = 'unknown'
+                diameter = 'unknown'
+
         if used_filament_mm != 'unknown' and density != 'unknown':
             used_filament_g = round(used_filament_mm * (diameter/2)**2 * 3.14 * density / 1000, 2)
         else :
@@ -448,7 +503,7 @@ class KeybaseBot:
             >`Filament used  :` {int(used_filament_mm / 100) if used_filament_mm != "unknown" else "unknown"} m / {used_filament_g} g
             >`Current layer  :` {current_layer} / {total_layers}
         """)
-        await self.get_snapshot()
+        await self.get_snapshots()
         return msg
 
     async def run_bot(self):
@@ -528,40 +583,39 @@ class KeybaseBot:
         self.manual_entry = {}
         return ret
 
-    async def get_snapshot(self) -> None:
+    async def get_snapshots(self) -> None:
         '''
         Get the snapshot from the printer
         '''
-        self.logger.info(f"Fetching url for snapshot")
-        url = await self.get_snapchot_url()
-        if not url :
-            self.logger.info(f"Snapshot url not found")
-            return
-        snapchot_url = f'http://{self.hostname}'+url
-        # download image file from snaphot_url and embed into message
-        self.logger.info(f"Downloading snapshot from {snapchot_url}")
-        res = requests.get(snapchot_url, stream = True)
-        self.logger.debug(f"Response: {res}")
-        if res.status_code == 200:
-            if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
-                os.makedirs(os.path.join(this_dir, '..', 'tmp'))
-            with open(self.snap_file,'wb') as f:
-                shutil.copyfileobj(res.raw, f)
+        for id in self.camera_settings :
+            self.logger.info(f"Fetching url for snapshot (camera {id})")
+            url = await self.get_snapchot_url(id)
+            if not url :
+                self.logger.info(f"Snapshot (camera {id}) url not found")
+            else :
+                snapchot_url = f'http://{self.hostname}'+url
+                # download image file from snaphot_url and embed into message
+                self.logger.info(f"Downloading snapshot from {snapchot_url}")
+                res = requests.get(snapchot_url, stream = True)
+                self.logger.debug(f"Response: {res}")
+                if res.status_code == 200:
+                    if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
+                        os.makedirs(os.path.join(this_dir, '..', 'tmp'))
+                    with open(os.path.join(this_dir, '..', 'tmp', f'snapshot_{id}.jpeg'),'wb') as f:
+                        shutil.copyfileobj(res.raw, f)
 
-            if os.path.exists(os.path.join(this_dir, '..', 'config', 'camera.json')):
-                with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
-                    camera = json.load(file)
-                if 'rotate' in camera :
-                    shutil.copyfileobj(res.raw, f)
-                    img = Image.open(self.snap_file)
-                    img = img.rotate(int(camera['rotate']))
-                    img.save(self.snap_file)
-            self.logger.info('Image sucessfully Downloaded: snapshot.jpeg')
-        else:
-            self.logger.info('Image Couldn\'t be retrieved')
-            shutil.copyfile(os.path.join(this_dir, '..', 'common', 'no_image.png'), self.snap_file)
+                    if self.camera_settings :
+                        if 'rotate' in self.camera_settings[id] :
+                            shutil.copyfileobj(res.raw, f)
+                            img = Image.open(os.path.join(this_dir, '..', 'tmp', f'snapshot_{id}.jpeg'))
+                            img = img.rotate(int(self.camera_settings[id]['rotate']))
+                            img.save(os.path.join(this_dir, '..', 'tmp', f'snapshot_{id}.jpeg'))
+                    self.logger.info('Image sucessfully Downloaded: snapshot.jpeg')
+                else:
+                    self.logger.info('Image Couldn\'t be retrieved')
+                    shutil.copyfile(os.path.join(this_dir, '..', 'common', 'no_image.png'), os.path.join(this_dir, '..', 'tmp', f'snapshot_{id}.jpeg'))
 
-    async def get_snapchot_url(self) -> str:
+    async def get_snapchot_url(self, id) -> str:
         '''
         Get the snapshot url from Moonraker
         @return: Response from Moonraker
@@ -573,18 +627,8 @@ class KeybaseBot:
         self.logger.debug(f"Sending : {self.manual_entry}")
         ret = await self._send_manual_request()
         self.logger.debug(f"Response: {ret}")
-        #if camera.json exists get id
-        if os.path.exists(os.path.join(this_dir, '..', 'config', 'camera.json')):
-            with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
-                camera = json.load(file)
-            if 'id' in camera :
-                id = int(camera['id'])
-            else :
-                id = 0
-        else :
-            id = 0
         if ret['result']['webcams'] :
-            snapchot_url = ret['result']['webcams'][id]['snapshot_url']
+            snapchot_url = ret['result']['webcams'][int(id)-1]['snapshot_url']
         else :
             snapchot_url = None
         self.manual_entry = {}
