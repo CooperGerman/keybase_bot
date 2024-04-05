@@ -294,6 +294,7 @@ class KeybaseBot:
             if 'method' in item and item['method'] == 'notify_history_changed' :
 
                 if item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
+                    status = 'completed'
                     message = f"Job {item['params'][0]['job']['filename']} completed"
                     # remove thumbnail files
                     if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png')):
