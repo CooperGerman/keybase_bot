@@ -376,7 +376,7 @@ class KeybaseBot:
         '''
         if not os.path.exists(os.path.join(this_dir, '..', 'config', 'camera.json')):
             # create an empty camera.json file
-            os.mkdir(os.path.join(this_dir, '..', 'config'))
+            os.makedirs(os.path.join(this_dir, '..', 'config'), exist_ok=True)
             with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'w') as config_file:
                 json.dump({}, config_file)
         with open(os.path.join(this_dir, '..', 'config', 'camera.json'), 'r') as file:
