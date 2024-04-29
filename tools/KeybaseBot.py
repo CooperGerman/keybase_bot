@@ -32,6 +32,7 @@ import datetime
 from PIL import Image
 import pykeybasebot.types.chat1 as chat1
 from pykeybasebot import Bot
+import logging
 
 from typing import Any, Dict, List, Optional
 
@@ -54,7 +55,7 @@ ALLOWED_USERS = json.load(open(os.path.join(this_dir, '..', 'common', 'allowed_u
 
 class KeybaseBot:
     def __init__(
-        self, sockpath: pathlib.Path, presets: List[Dict[str, Any]], paperkey: str, logger
+        self, sockpath: pathlib.Path, presets: List[Dict[str, Any]], paperkey: str, logger : logging
     ) -> None:
         '''
         The class represents a Keybase bot that connects to Moonraker via a Unix Socket and to keybase via the keybase bot API.
@@ -64,7 +65,7 @@ class KeybaseBot:
         @param paperkey: Keybase paperkey
         @param logger: Logger instance
         '''
-        self.logger = logger
+        self.logger : logging = logger
         # get paperkey from file
         with open(paperkey, 'r') as file:
             self.paperkey = file.read().replace('\n', '')
@@ -72,12 +73,12 @@ class KeybaseBot:
         # if pidfile exists use it to connect the bot
         self._loop = None
         if os.path.isfile('/run/user/1000/keybase/keybased.pid'):
-            self.bot = Bot(
+            self.bot : Bot = Bot(
                 username="uboe_bot", paperkey=self.paperkey, handler=self, pid_file='/run/user/1000/keybase/keybased.pid', loop=self._loop
             )
             self.logger.info("PID file exists")
         else:
-            self.bot = Bot(
+            self.bot : Bot = Bot(
                 username="uboe_bot", paperkey=self.paperkey, handler=self, loop=self._loop
             )
         self.printfarmchannel = chat1.ChatChannel(
@@ -512,6 +513,11 @@ class KeybaseBot:
         '''
         Start the keybase bot
         '''
+        try :
+            await self.bot.ensure_initialized()
+        except Exception as e:
+            self.logger.error(f"Error: {e}")
+            sys.exit(1)
         asyncio.run(await self.bot.start(listen_options=LISTEN_OPTIONS))
 
     async def run_moonraker(self) -> None:
