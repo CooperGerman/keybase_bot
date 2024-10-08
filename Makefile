@@ -24,6 +24,11 @@ install : check_bins env setup service
 
 setup: venv paperkey channel log
 
+update:
+	systemctl --user stop keybase_bot.service
+	git pull --rebase --autostash
+	systemctl --user start keybase_bot.service
+
 log : /home/$(USER)/printer_data/logs/keybase_bot.log
 /home/$(USER)/printer_data/logs/keybase_bot.log :
 	ln -s /home/$(USER)/keybase_bot/logs/keybase_bot.log /home/$(USER)/printer_data/logs/keybase_bot.log
