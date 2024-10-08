@@ -470,13 +470,12 @@ class KeybaseBot:
         current_layer = status['result']['status']['print_stats']['info']['current_layer'] if 'info' in status['result']['status']['print_stats'] and 'current_layer' in status['result']['status']['print_stats']['info'] else 'unknown'
 
         used_filament_mm = status['result']['status']['print_stats']['filament_used'] if 'filament_used' in status['result']['status']['print_stats'] else 'unknown'
+        density = 'unknown'
+        diameter = 'unknown'
         if 'result' in filament :
             if isinstance(filament['result'], dict) and 'filament' in filament['result']:
                 density = float(filament['result']['filament']['density']) if 'filament' in filament['result'] and 'density' in filament['result']['filament'] else 'unknown' # in g/cm3
                 diameter = float(filament['result']['filament']['diameter']) if 'filament' in filament['result'] and 'diameter' in filament['result']['filament'] else 'unknown' # in mm
-            else :
-                density = 'unknown'
-                diameter = 'unknown'
 
         if used_filament_mm != 'unknown' and density != 'unknown':
             used_filament_g = round(used_filament_mm * (diameter/2)**2 * 3.14 * density / 1000, 2)
