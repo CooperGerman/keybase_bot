@@ -19,6 +19,7 @@ Heavily inspired by :
     - https://github.com/keybase/pykeybasebot/blob/master/examples/1_pingpong.py
 '''
 from __future__ import annotations
+from math import log
 import os
 import sys
 import asyncio
@@ -635,7 +636,11 @@ class KeybaseBot:
         ret = await self._send_manual_request()
         self.logger.debug(f"Response: {ret}")
         if ret['result']['webcams'] :
-            snapchot_url = ret['result']['webcams'][int(id)-1]['snapshot_url']
+            try :
+                snapchot_url = ret['result']['webcams'][int(id)-1]['snapshot_url']
+            except IndexError :
+                snapchot_url = None
+                logging.error(f"Camera {id} not found")
         else :
             snapchot_url = None
         self.manual_entry = {}
