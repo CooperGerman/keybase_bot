@@ -143,114 +143,118 @@ class KeybaseBot:
         debug = False
         msg = "Command not recognized. Try `/uboe_bot help`"
         match = re.match(r'(^/uboe_bot)\s+(.*$)', chat_msg)
-        if bot_command :
-            file = None
-            if re.match(r'(^/uboe_bot)\s+(debug)\s+(.*$)', chat_msg) :
-                if chat_event.msg.sender.username in ALLOWED_USERS:
-                    match = re.match(r'(^/uboe_bot)\s+debug\s+(.*$)', chat_msg)
-                    debug = True
-                else :
-                    msg = "You are not allowed to enable debug mode"
+        try :
+            if bot_command :
+                file = None
+                if re.match(r'(^/uboe_bot)\s+(debug)\s+(.*$)', chat_msg) :
+                    if chat_event.msg.sender.username in ALLOWED_USERS:
+                        match = re.match(r'(^/uboe_bot)\s+debug\s+(.*$)', chat_msg)
+                        debug = True
+                    else :
+                        msg = "You are not allowed to enable debug mode"
 
-            if match :
-                if len(match.groups()) == 2 :
-                    command = match.group(2)
-                    # if "help" in command :
-                    if command == "help":
-                        msg = textwrap.dedent("""
-                            Hello there! I'm uboe_bot, a bot for print farm management.
-                            I can help you with the following commands:
-                                `help` - this help message
-                                `status` - display the printer's status
-                                `snapshot` - display the printer's snapshot
-                                `emergency_stop` - emergency stop
-                                `camera id=<int> rotate=<int>` - configure camera
-                                `debug` - enable debug mode (followed by the command you want to debug)
-                                          Please run `/uboe_bot debug commands` for more info and available commands
-                            More commands coming soon!
-                        """)
-                    #if command == "status" :
-                    elif command == "status" :
-                        msg = await self.kb_status_msg()
-                        file = self._get_snap_file('status')
-                    #if command == "snapshot" :
-                    elif command == "snapshot" :
-                        msg = "Requested snapshot:"
-                        await self.get_snapshots()
-                        file = self._get_snap_file('status')
-                    # configure camera (/uboe_bot camera id=0 rotate=180)
-                    elif re.match(r'(^camera)', command) :
-                        # unpack command arguments without leading /uboe_bot camera
-                        arguments = re.match(r'.*?id=(\d+)\s+rotate=(\d+)', command)
-                        if arguments :
-                            if len(arguments.groups()) == 2 :
-                                id = arguments.group(1)
-                                rotate = arguments.group(2)
-                                # save configuration into a json file
-                                if not os.path.exists(os.path.join(this_dir, '..', 'config')):
-                                    os.makedirs(os.path.join(this_dir, '..', 'config'))
-                                self.camera_settings[id] = {'rotate': rotate}
-                                self._save_camera_settings()
-                                msg = "Camera settings updated"
+                if match :
+                    if len(match.groups()) == 2 :
+                        command = match.group(2)
+                        # if "help" in command :
+                        if command == "help":
+                            msg = textwrap.dedent("""
+                                Hello there! I'm uboe_bot, a bot for print farm management.
+                                I can help you with the following commands:
+                                    `help` - this help message
+                                    `status` - display the printer's status
+                                    `snapshot` - display the printer's snapshot
+                                    `emergency_stop` - emergency stop
+                                    `camera id=<int> rotate=<int>` - configure camera
+                                    `debug` - enable debug mode (followed by the command you want to debug)
+                                            Please run `/uboe_bot debug commands` for more info and available commands
+                                More commands coming soon!
+                            """)
+                        #if command == "status" :
+                        elif command == "status" :
+                            msg = await self.kb_status_msg()
+                            file = self._get_snap_file('status')
+                        #if command == "snapshot" :
+                        elif command == "snapshot" :
+                            msg = "Requested snapshot:"
+                            await self.get_snapshots()
+                            file = self._get_snap_file('status')
+                        # configure camera (/uboe_bot camera id=0 rotate=180)
+                        elif re.match(r'(^camera)', command) :
+                            # unpack command arguments without leading /uboe_bot camera
+                            arguments = re.match(r'.*?id=(\d+)\s+rotate=(\d+)', command)
+                            if arguments :
+                                if len(arguments.groups()) == 2 :
+                                    id = arguments.group(1)
+                                    rotate = arguments.group(2)
+                                    # save configuration into a json file
+                                    if not os.path.exists(os.path.join(this_dir, '..', 'config')):
+                                        os.makedirs(os.path.join(this_dir, '..', 'config'))
+                                    self.camera_settings[id] = {'rotate': rotate}
+                                    self._save_camera_settings()
+                                    msg = "Camera settings updated"
 
+                                else :
+                                    msg = "Malformed command received. Try `/uboe_bot help`"
                             else :
                                 msg = "Malformed command received. Try `/uboe_bot help`"
+
+                        elif command == "emergency_stop" :
+                            msg = "Emergency stop requested"
+                            self.manual_entry = {
+                                "method": "printer.emergency_stop",
+                                "params": {}
+                            }
+                            self.logger.debug(f"Sending : {self.manual_entry}")
+                            ret = await self._send_manual_request()
+                            self.logger.debug(f"Response: {ret}")
+                            self.manual_entry = {}
+
+                        # if "🌴ping🌴" == command :
+                        elif "🌴ping🌴" == command :
+                            msg = "🍹PONG!🍹"
                         else :
-                            msg = "Malformed command received. Try `/uboe_bot help`"
+                            if debug :
+                                if command == "moonraker" :
+                                    # check if socket is connected
+                                    if self.connected :
+                                        msg = "Moonraker is connected"
+                                    else :
+                                        msg = "Moonraker is not connected"
+                                elif command == "reconnect_moonraker" :
+                                    # check if socket is connected
+                                    if self.connected :
+                                        msg = "Moonraker is already connected"
+                                    else :
+                                        await self._connect()
+                                        msg = "Moonraker reconnected"
+                                elif command == "emulate_job" :
+                                    message = f"Emulated job started"
+                                    self._loop.create_task(self.pending_status_message(message))
+                                elif command == "commands" : # list all commands
+                                    msg = textwrap.dedent("""
+                                        Available commands:
+                                            `moonraker` - check if moonraker is connected
+                                            `reconnect_moonraker` - reconnect to moonraker
+                                            `emulate_job` - emulate a job
+                                            `commands` - list all debug commands
+                                    """)
 
-                    elif command == "emergency_stop" :
-                        msg = "Emergency stop requested"
-                        self.manual_entry = {
-                            "method": "printer.emergency_stop",
-                            "params": {}
-                        }
-                        self.logger.debug(f"Sending : {self.manual_entry}")
-                        ret = await self._send_manual_request()
-                        self.logger.debug(f"Response: {ret}")
-                        self.manual_entry = {}
-
-                    # if "🌴ping🌴" == command :
-                    elif "🌴ping🌴" == command :
-                        msg = "🍹PONG!🍹"
                     else :
-                        if debug :
-                            if command == "moonraker" :
-                                # check if socket is connected
-                                if self.connected :
-                                    msg = "Moonraker is connected"
-                                else :
-                                    msg = "Moonraker is not connected"
-                            elif command == "reconnect_moonraker" :
-                                # check if socket is connected
-                                if self.connected :
-                                    msg = "Moonraker is already connected"
-                                else :
-                                    await self._connect()
-                                    msg = "Moonraker reconnected"
-                            elif command == "emulate_job" :
-                                message = f"Emulated job started"
-                                self._loop.create_task(self.pending_status_message(message))
-                            elif command == "commands" : # list all commands
-                                msg = textwrap.dedent("""
-                                    Available commands:
-                                        `moonraker` - check if moonraker is connected
-                                        `reconnect_moonraker` - reconnect to moonraker
-                                        `emulate_job` - emulate a job
-                                        `commands` - list all debug commands
-                                """)
-
+                        msg = "Malformed command received. Try `/uboe_bot help`"
                 else :
-                    msg = "Malformed command received. Try `/uboe_bot help`"
-            else :
-                msg = "Not command received. Try `/uboe_bot help`"
+                    msg = "Not command received. Try `/uboe_bot help`"
 
-            if not file:
-                await bot.chat.send(channel, self.header_message + msg + self.footer_message)
-            else :
-                if not os.path.exists(file):
+                if not file:
                     await bot.chat.send(channel, self.header_message + msg + self.footer_message)
                 else :
-                    await bot.chat.attach(channel, file, self.header_message + msg + self.footer_message)
+                    if not os.path.exists(file):
+                        await bot.chat.send(channel, self.header_message + msg + self.footer_message)
+                    else :
+                        await bot.chat.attach(channel, file, self.header_message + msg + self.footer_message)
+        except Exception as e:
+            self.logger.error(f"Error: {e}")
+            await bot.chat.send(channel, self.header_message + f"Error: {e}" + self.footer_message)
 
     async def _process_stream(
             self, reader: asyncio.StreamReader
