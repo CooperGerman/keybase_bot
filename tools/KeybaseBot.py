@@ -52,7 +52,7 @@ LISTEN_OPTIONS = {
         {'name' : 'printhive', 'public' : None, 'members_type' : 'team', 'topic_type' : 'chat', 'topic_name' : os.uname().nodename}
     ]
 }
-ALLOWED_USERS = json.load(open(os.path.join(this_dir, '..', 'common', 'allowed_users.json'), 'r'))
+ALLOWED_USERS = json.load(open(os.path.join(this_dir, '..', 'config', 'allowed_users.json'), 'r'))
 
 _LOG_LEVELS = {'DEBUG': 0, 'INFO': 1, 'WARNING': 2, 'ERROR': 3, 'CRITICAL': 4}
 
