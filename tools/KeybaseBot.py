@@ -54,6 +54,56 @@ LISTEN_OPTIONS = {
 }
 ALLOWED_USERS = json.load(open(os.path.join(this_dir, '..', 'common', 'allowed_users.json'), 'r'))
 
+_LOG_LEVELS = {'DEBUG': 0, 'INFO': 1, 'WARNING': 2, 'ERROR': 3, 'CRITICAL': 4}
+
+class ServiceConfig:
+    '''
+    Persistent service configuration backed by config/service.json.
+    Attribute defaults are written to disk the first time the file is absent.
+    '''
+    _path: str = os.path.join(this_dir, '..', 'config', 'service.json')
+
+    # --- defaults ---
+    notify_print_start: bool = True
+    notify_print_end: bool = True
+    log_level: str = 'INFO'
+
+    def __init__(self) -> None:
+        os.makedirs(os.path.dirname(self._path), exist_ok=True)
+        if os.path.exists(self._path):
+            with open(self._path, 'r') as f:
+                data = json.load(f)
+            for key, value in data.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+        else:
+            self.save()
+
+    def save(self) -> None:
+        '''Persist current settings to config/service.json.'''
+        with open(self._path, 'w') as f:
+            json.dump(self._to_dict(), f, indent=4)
+
+    def _to_dict(self) -> Dict[str, Any]:
+        return {
+            'notify_print_start': self.notify_print_start,
+            'notify_print_end': self.notify_print_end,
+            'log_level': self.log_level,
+        }
+
+    def items(self):
+        return self._to_dict().items()
+
+    def passes_log_level(self, event_level: str) -> bool:
+        '''
+        Return True if event_level is at or above the configured log_level.
+        @param event_level: Severity of the event (DEBUG/INFO/WARNING/ERROR/CRITICAL)
+        '''
+        configured = _LOG_LEVELS.get(self.log_level.upper(), 1)
+        event = _LOG_LEVELS.get(event_level.upper(), 1)
+        return event >= configured
+
+
 class KeybaseBot:
     def __init__(
         self, sockpath: pathlib.Path, presets: List[Dict[str, Any]], paperkey: str, logger : logging
@@ -117,6 +167,7 @@ class KeybaseBot:
             [len(p.get("method", "")) for p in self.api_presets]
         )
         self._init_camera_settings()
+        self.service_config = ServiceConfig()
         self.header_message = textwrap.dedent(f"""
             * Hostname: `{self.hostname}` *
             """)
@@ -166,6 +217,10 @@ class KeybaseBot:
                                     `snapshot` - display the printer's snapshot
                                     `emergency_stop` - emergency stop
                                     `camera id=<int> rotate=<int>` - configure camera
+                                    `config` - show current service configuration
+                                    `config set <key> <value>` - update service configuration
+                                            Keys: `notify_print_start`, `notify_print_end` (true/false)
+                                                  `log_level` (DEBUG/INFO/WARNING/ERROR/CRITICAL)
                                     `debug` - enable debug mode (followed by the command you want to debug)
                                             Please run `/uboe_bot debug commands` for more info and available commands
                                 More commands coming soon!
@@ -198,6 +253,36 @@ class KeybaseBot:
                                     msg = "Malformed command received. Try `/uboe_bot help`"
                             else :
                                 msg = "Malformed command received. Try `/uboe_bot help`"
+
+                        elif re.match(r'^config', command):
+                            config_set = re.match(r'^config\s+set\s+(\w+)\s+(\S+)$', command)
+                            if command == 'config':
+                                lines = [f"`{k}`: `{v}`" for k, v in self.service_config.items()]
+                                msg = "Current service configuration:\n" + "\n".join(lines)
+                            elif config_set:
+                                if chat_event.msg.sender.username in ALLOWED_USERS:
+                                    key = config_set.group(1)
+                                    value = config_set.group(2)
+                                    if key in ('notify_print_start', 'notify_print_end'):
+                                        if value.lower() in ('true', 'false'):
+                                            setattr(self.service_config, key, value.lower() == 'true')
+                                            self.service_config.save()
+                                            msg = f"Updated `{key}` to `{getattr(self.service_config, key)}`"
+                                        else:
+                                            msg = f"Invalid value `{value}`. Use `true` or `false`"
+                                    elif key == 'log_level':
+                                        if value.upper() in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
+                                            self.service_config.log_level = value.upper()
+                                            self.service_config.save()
+                                            msg = f"Updated `log_level` to `{self.service_config.log_level}`"
+                                        else:
+                                            msg = f"Invalid log level `{value}`. Use: DEBUG, INFO, WARNING, ERROR or CRITICAL"
+                                    else:
+                                        msg = f"Unknown setting `{key}`. Available: notify_print_start, notify_print_end, log_level"
+                                else:
+                                    msg = "You are not allowed to change service settings"
+                            else:
+                                msg = "Malformed config command. Try `/uboe_bot config` or `/uboe_bot help`"
 
                         elif command == "emergency_stop" :
                             msg = "Emergency stop requested"
@@ -292,6 +377,7 @@ class KeybaseBot:
             # START: {'jsonrpc': '2.0', 'method': 'notify_history_changed', 'params': [{'action': 'added', 'job': {'end_time': None, 'filament_used': 0.0, 'filename': 'ROY_cover_PLA_1h26m.gcode', 'metadata': {'size': 2417349, 'modified': 1695304875.0769384, 'uuid': '2488b052-ad04-4de3-8158-16acd85f273f', 'slicer': 'OrcaSlicer', 'slicer_version': '1.7.0', 'gcode_start_byte': 24778, 'gcode_end_byte': 2402984, 'layer_count': 10, 'object_height': 3.0, 'estimated_time': 5132, 'nozzle_diameter': 0.4, 'layer_height': 0.3, 'first_layer_height': 0.3, 'first_layer_extr_temp': 220.0, 'first_layer_bed_temp': 60.0, 'chamber_temp': 0.0, 'filament_name': 'Rosa 3D PLA Silk Rainbow', 'filament_type': 'PLA', 'filament_used': '25.59', 'filament_total': 8509.96, 'filament_weight_total': 25.59, 'thumbnails': [{'width': 32, 'height': 24, 'size': 707, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-32x32.png'}, {'width': 160, 'height': 120, 'size': 2347, 'relative_path': '.thumbs/ROY_cover_PLA_1h26m-160x120.png'}]}, 'print_duration': 0.0, 'status': 'in_progress', 'start_time': 1695313479.608397, 'total_duration': 0.049926147010410205, 'job_id': '000010', 'exists': True}}]}
             status = ""
             message = None
+            level = 'INFO'
             to_printfarm = False
             # check the status of the job
             if 'method' in item and item['method'] in  ['notify_history_changed', 'notify_check_failure'] :
@@ -301,7 +387,9 @@ class KeybaseBot:
 
                 if item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'completed':
                     status = 'completed'
-                    message = f"Job {item['params'][0]['job']['filename']} completed"
+                    level = 'INFO'
+                    if self.service_config.notify_print_end:
+                        message = f"Job {item['params'][0]['job']['filename']} completed"
                     # remove thumbnail files
                     if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png')):
                         shutil.rmtree(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png'))
@@ -309,7 +397,9 @@ class KeybaseBot:
                 # job cancelled
                 elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'cancelled':
                     status = 'cancelled'
-                    message = f"Job {item['params'][0]['job']['filename']} cancelled"
+                    level = 'WARNING'
+                    if self.service_config.notify_print_end:
+                        message = f"Job {item['params'][0]['job']['filename']} cancelled"
                     # remove thumbnail files
                     if os.path.exists(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png')):
                         shutil.rmtree(os.path.join(this_dir, '..', 'tmp', 'thumbail_*.png'))
@@ -317,12 +407,16 @@ class KeybaseBot:
                 # job paused
                 elif item['params'][0]['action'] == 'finished' and item['params'][0]['job']['status'] == 'paused':
                     status = 'paused'
-                    message = f"Job {item['params'][0]['job']['filename']} paused"
+                    level = 'WARNING'
+                    if self.service_config.notify_print_end:
+                        message = f"Job {item['params'][0]['job']['filename']} paused"
                 # job started
                 elif item['params'][0]['action'] == 'added' and item['params'][0]['job']['status'] == 'in_progress':
                     status = 'in_progress'
+                    level = 'INFO'
                     to_printfarm = True
-                    message = f"Job {item['params'][0]['job']['filename']} started"
+                    if self.service_config.notify_print_start:
+                        message = f"Job {item['params'][0]['job']['filename']} started"
                     # save the thumbnails
                     if not os.path.exists(os.path.join(this_dir, '..', 'tmp')):
                         os.makedirs(os.path.join(this_dir, '..', 'tmp'))
@@ -339,10 +433,11 @@ class KeybaseBot:
                             message += f"\nThumbnail Couldn\'t be retrieved"
 
             if 'method' in item and item['method'] == 'notify_check_failure' :
+                level = 'ERROR'
                 message = f"Check filament failure: \n{item['params'][0]['message']}"
 
             # if message is not None send it to the keybase channel
-            if message :
+            if message and self.service_config.passes_log_level(level):
                 self._loop.create_task(self.pending_status_message(message, status, to_printfarm))
 
         self.logger.info("Unix Socket Disconnection from _process_stream()")
