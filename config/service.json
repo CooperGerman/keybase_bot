@@ -1,0 +1,5 @@
+{
+    "notify_print_start": true,
+    "notify_print_end": true,
+    "log_level": "INFO"
+}
